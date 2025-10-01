@@ -2,6 +2,12 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useUserDetail } from "@/hooks/api/v2/users/[id]/show.hook"
+import { useUserRoles } from "@/hooks/api/v2/users/[id]/roles"
+import { useUserAddresses } from "@/hooks/api/v2/users/[id]/addresses"
+import { useUserPhones } from "@/hooks/api/v2/users/[id]/phones"
+import { useUserSessions } from "@/hooks/api/v2/users/[id]/sessions"
+import { useUserChangeHistory } from "@/hooks/api/v2/users/[id]/change-history"
 import {
   IconArrowLeft,
   IconUser,
@@ -60,9 +66,9 @@ interface Address {
   recipientName: string
   phoneNumber: string
   addressLine1: string
-  addressLine2: string | null
+  addressLine2?: string
   city: string
-  state: string
+  province: string
   postalCode: string
   country: string
   isDefault: boolean
@@ -124,9 +130,7 @@ interface ChangeHistory {
  */
 interface UserRole {
   id: number
-  name: string
-  grantsAll: boolean
-  createdAt: string
+  [key: string]: any
 }
 
 /**
@@ -156,6 +160,21 @@ interface UserPhone {
   isVerified: boolean
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * Interface untuk UserSession
+ */
+interface UserSession {
+  id: string;
+  userId: string;
+  deviceId: string;
+  ipAddress: string;
+  userAgent: string;
+  lastActivity: string;
+  isActive: boolean;
+  createdAt: string;
+  expiresAt: string;
 }
 
 /**
@@ -192,91 +211,53 @@ export default function UserDetailPage() {
   const [sessionError, setSessionError] = React.useState<string | null>(null)
 
   /**
-   * Fungsi untuk mengambil data pengguna dari API
+   * Menggunakan hook untuk mengambil data pengguna dan data terkait
    */
-  const fetchUser = async (id: string) => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      
-      const response = await fetch(`http://localhost:9999/api/v1/users/${id}`)
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('Pengguna tidak ditemukan')
-        }
-        throw new Error('Gagal mengambil data pengguna')
-      }
-      
-      const userData = await response.json()
-      setUser(userData)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Terjadi kesalahan')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const { user: userDetail, loading: userLoading, error: userError, fetchUserDetail } = useUserDetail()
+  const { roles: userRolesData, loading: rolesLoading, error: roleErrorHook, fetchUserRoles: fetchUserRolesData } = useUserRoles()
+  const { addresses: addressesData, loading: addressesLoading, error: addressErrorHook, fetchUserAddresses } = useUserAddresses()
+  const { phones: phonesData, loading: phonesLoading, error: phoneErrorHook, fetchUserPhones } = useUserPhones()
+  const { sessions: sessionsData, loading: sessionsLoading, error: sessionErrorHook, fetchUserSessions } = useUserSessions()
+  const { changeHistory: changeHistoriesData, loading: changeHistoriesLoading, error: changeHistoriesErrorHook, fetchUserChangeHistory } = useUserChangeHistory()
 
-  /**
-   * Fungsi untuk mengambil data alamat pengguna dari API
-   */
-  const fetchAddresses = async (id: string) => {
-    try {
-      setIsLoadingAddresses(true)
-      setAddressError(null)
-      
-      const response = await fetch(`http://localhost:9999/api/v1/users/${id}/addresses`)
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          setAddresses([])
-          return
-        }
-        throw new Error('Gagal mengambil data alamat')
-      }
-      
-      const result = await response.json()
-      setAddresses(result.data || [])
-    } catch (err) {
-      setAddressError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil alamat')
-    } finally {
-      setIsLoadingAddresses(false)
+  // Menggunakan data dari hook
+  React.useEffect(() => {
+    if (addressesData) {
+      setAddresses(addressesData as Address[]);
     }
-  }
+    if (phonesData) {
+      setPhones(phonesData);
+    }
+    if (userRolesData) {
+      setUserRoles(userRolesData);
+    }
+    if (sessionsData) {
+      // Konversi UserSession[] ke SessionData[] untuk mengatasi perbedaan tipe
+      const convertedSessions: SessionData[] = sessionsData.map(session => ({
+        id: Number(session.id),
+        userId: Number(session.userId),
+        refreshToken: '',
+        expiresAt: new Date(session.expiresAt),
+        createdAt: new Date(session.createdAt),
+        updatedAt: new Date(),
+        userAgent: session.userAgent,
+        ipAddress: session.ipAddress
+      }));
+      setSessions(convertedSessions);
+    }
+  }, [addressesData, phonesData, userRolesData, sessionsData]);
 
   /**
    * Fungsi untuk mengambil data nomor telepon pengguna dari API
    */
-  /**
-   * Fungsi untuk mengambil data nomor telepon pengguna dari API
-   */
-  const fetchPhones = async (id: string) => {
-    try {
-      setIsLoadingPhones(true)
-      setPhoneError(null)
-      
-      const response = await fetch(`http://localhost:9999/api/v1/users/${id}/phones`)
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          setPhones([])
-          return
-        }
-        throw new Error('Gagal mengambil data nomor telepon')
-      }
-      
-      const result = await response.json()
-      setPhones(result.data || [])
-    } catch (err) {
-      setPhoneError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil nomor telepon')
-    } finally {
-      setIsLoadingPhones(false)
-    }
-  }
-
-  /**
-   * Fungsi untuk mengambil data access logs pengguna dari API
-   */
+  // Menggunakan error state dari hook
+  React.useEffect(() => {
+    if (addressErrorHook) setAddressError(addressErrorHook instanceof Error ? addressErrorHook.message : String(addressErrorHook));
+    if (phoneErrorHook) setPhoneError(phoneErrorHook instanceof Error ? phoneErrorHook.message : String(phoneErrorHook));
+    if (roleErrorHook) setRoleError(roleErrorHook instanceof Error ? roleErrorHook.message : String(roleErrorHook));
+    if (sessionErrorHook) setSessionError(sessionErrorHook instanceof Error ? sessionErrorHook.message : String(sessionErrorHook));
+    if (userError) setError(userError instanceof Error ? userError.message : String(userError));
+  }, [addressErrorHook, phoneErrorHook, roleErrorHook, sessionErrorHook, userError]);
   const fetchAccessLogs = async (id: string) => {
     try {
       setIsLoadingAccessLogs(true)
@@ -309,18 +290,24 @@ export default function UserDetailPage() {
       setIsLoadingChangeHistories(true)
       setChangeHistoryError(null)
       
-      const response = await fetch(`http://localhost:9999/api/v1/users/${id}/change-histories`)
+      const result = await fetchUserChangeHistory(id)
       
-      if (!response.ok) {
-        if (response.status === 404) {
-          setChangeHistories([])
-          return
-        }
-        throw new Error('Gagal mengambil data change histories')
+      // Menggunakan data dari hasil fetchUserChangeHistory, bukan dari state changeHistoriesData
+      if (result && result.data) {
+        // Konversi tipe data untuk menyesuaikan dengan interface lokal
+        const convertedData = result.data.map((item: ChangeHistory) => ({
+          id: Number(item.id),
+          userId: item.userId ? Number(item.userId) : null,
+          tableName: item.tableName,
+          recordId: Number(item.recordId),
+          action: item.action,
+          oldValues: item.oldValues,
+          newValues: item.newValues,
+          createdAt: item.createdAt,
+        }))
+        
+        setChangeHistories(convertedData)
       }
-      
-      const result = await response.json()
-      setChangeHistories(result.data || [])
     } catch (err) {
       setChangeHistoryError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil change histories')
     } finally {
@@ -328,66 +315,17 @@ export default function UserDetailPage() {
     }
   }
 
-  /**
-   * Fungsi untuk mengambil data roles pengguna dari API
-   */
-  const fetchUserRoles = async (id: string) => {
-    try {
-      setIsLoadingRoles(true)
-      setRoleError(null)
-      
-      const response = await fetch(`http://localhost:9999/api/v1/users/${id}/roles`)
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          setUserRoles([])
-          return
-        }
-        throw new Error('Gagal mengambil data roles')
-      }
-      
-      const result = await response.json()
-      setUserRoles(result.data?.roles || [])
-    } catch (err) {
-      setRoleError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil roles')
-    } finally {
-      setIsLoadingRoles(false)
-    }
-  }
-
-  /**
-   * Fungsi untuk mengambil data sessions pengguna dari API
-   */
-  const fetchSessions = async (id: string) => {
-    try {
-      setIsLoadingSessions(true)
-      setSessionError(null)
-      
-      const response = await fetch(`http://localhost:9999/api/v1/users/${id}/sessions`)
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          setSessions([])
-          return
-        }
-        throw new Error('Gagal mengambil data sessions')
-      }
-      
-      const result = await response.json()
-      setSessions(result.data || [])
-    } catch (err) {
-      setSessionError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil sessions')
-    } finally {
-      setIsLoadingSessions(false)
-    }
-  }
-
   // Fetch data pengguna saat komponen dimuat
   React.useEffect(() => {
     if (userId) {
-      fetchUser(userId)
+      fetchUserDetail(userId)
+      fetchUserRolesData(userId)
+      fetchUserAddresses(userId)
+      fetchUserPhones(userId)
+      fetchUserSessions(userId)
+      fetchChangeHistories(userId)
     }
-  }, [userId])
+  }, [userId, fetchUserDetail, fetchUserRolesData, fetchUserAddresses, fetchUserPhones, fetchUserSessions, fetchChangeHistories])
 
   /**
    * Fungsi untuk mendapatkan inisial nama
@@ -481,7 +419,7 @@ export default function UserDetailPage() {
       }
       
       // Refresh data alamat
-      fetchAddresses(userId)
+      fetchUserAddresses(userId)
     } catch (err) {
       console.error('Error deleting address:', err)
       alert('Gagal menghapus alamat')
@@ -506,7 +444,7 @@ export default function UserDetailPage() {
       }
       
       // Refresh data alamat
-      fetchAddresses(userId)
+      fetchUserAddresses(userId)
     } catch (err) {
       console.error('Error setting default address:', err)
       alert('Gagal mengatur alamat default')
@@ -602,7 +540,7 @@ export default function UserDetailPage() {
         </Alert>
 
         <div className="flex justify-center">
-          <Button onClick={() => fetchUser(userId)}>
+          <Button onClick={() => fetchUserDetail(userId)}>
             Coba Lagi
           </Button>
         </div>
@@ -741,7 +679,7 @@ export default function UserDetailPage() {
             className="flex items-center gap-2"
             onClick={() => {
               if (addresses.length === 0 && !isLoadingAddresses) {
-                fetchAddresses(userId)
+                fetchUserAddresses(userId)
               }
             }}
           >
@@ -753,7 +691,7 @@ export default function UserDetailPage() {
             className="flex items-center gap-2"
             onClick={() => {
               if (phones.length === 0 && !isLoadingPhones) {
-                fetchPhones(userId)
+                fetchUserPhones(userId)
               }
             }}
           >
@@ -789,7 +727,7 @@ export default function UserDetailPage() {
             className="flex items-center gap-2"
             onClick={() => {
               if (userRoles.length === 0 && !isLoadingRoles) {
-                fetchUserRoles(userId)
+                fetchUserRolesData(userId)
               }
             }}
           >
@@ -801,7 +739,7 @@ export default function UserDetailPage() {
             className="flex items-center gap-2"
             onClick={() => {
               if (sessions.length === 0 && !isLoadingSessions) {
-                fetchSessions(userId)
+                fetchUserSessions(userId)
               }
             }}
           >
@@ -1112,7 +1050,7 @@ export default function UserDetailPage() {
                           <p className="text-sm">{address.addressLine2}</p>
                         )}
                         <p className="text-sm">
-                          {address.city}, {address.state} {address.postalCode}
+                          {address.city}, {address.province} {address.postalCode}
                         </p>
                         <p className="text-sm">{address.country}</p>
                         <p className="text-sm text-muted-foreground">

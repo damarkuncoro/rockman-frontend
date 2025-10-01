@@ -20,6 +20,13 @@ import {
   IconChevronsRight,
 } from "@tabler/icons-react"
 
+import { handleAddUser } from "./(actions)/handleAddUser"
+import { handleEditUser } from "./(actions)/handleEditUser"
+import { handleDeleteUser } from "./(actions)/handleDeleteUser"
+import { handleSaveUser } from "./(actions)/handleSaveUser"
+import { handleViewUser } from "./(actions)/handleViewUser"
+import { handleConfirmDelete } from "./(actions)/handleConfirmDelete"
+
 import { Badge } from "@/components/shadcn/ui/badge"
 import { Button } from "@/components/shadcn/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/shadcn/ui/card"
@@ -33,23 +40,25 @@ import { Label } from "@/components/shadcn/ui/label"
 import { Textarea } from "@/components/shadcn/ui/textarea"
 import { Switch } from "@/components/shadcn/ui/switch"
 import { SkeletonUserManagement } from "@/components/skeleton-user-management"
-import { useDepartments } from "@/hooks/useDepartments"
+import { useAllDepartments } from "@/hooks/api/v2/departments/"
+import { useAllUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/api/v2/users/"
 
 /**
- * Interface untuk data pengguna
+ * Interface untuk data pengguna dari API v2
  */
 interface User {
-  id: number
-  name: string
-  email: string
-  passwordHash: string
-  active: boolean
-  rolesUpdatedAt: string | null
-  department: string | null
-  region: string | null
-  level: number | null
-  createdAt: string
-  updatedAt: string
+  id: string;
+  username: string;
+  email: string;
+  passwordHash: string;
+  active: boolean;
+  rolesUpdatedAt: string | null;
+  departmentId: string | null;
+  region: string | null;
+  level: number | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
 /**
@@ -57,20 +66,43 @@ interface User {
  */
 export default function UserManagementPage() {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(true)
-  const [users, setUsers] = useState<User[]>([])
-  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [departmentFilter, setDepartmentFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [levelFilter, setLevelFilter] = useState("all")
   
-  // Hook untuk departments
-  const { departments, isLoading: isDepartmentsLoading } = useDepartments()
+  // Hook untuk departments dari API v2
+  const { 
+    departments, 
+    loading: isDepartmentsLoading, 
+    error: departmentsError,
+    fetchDepartments
+  } = useAllDepartments()
   
-  // State untuk pagination
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  // Menggunakan hook useAllUsers untuk fetch data users
+  const { 
+    users, 
+    loading: isLoading, 
+    error: usersError, 
+    page: currentPage, 
+    limit: itemsPerPage, 
+    total,
+    fetchUsers,
+    setPage: setCurrentPage,
+    setLimit: setItemsPerPage
+  } = useAllUsers(1, 10)
+  
+  // Error state untuk UI
+  const [error, setError] = useState<string | null>(null)
+
+  // Update error state ketika ada error dari hook
+  useEffect(() => {
+    if (usersError) {
+      setError(usersError.message || "Gagal memuat data pengguna")
+    } else {
+      setError(null)
+    }
+  }, [usersError])
 
   // State untuk modal
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -89,60 +121,28 @@ export default function UserManagementPage() {
     active: true
   })
 
-  /**
-   * Fungsi untuk fetch data users dari API
-   */
-  const fetchUsers = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      
-      const response = await fetch("http://localhost:9999/api/v1/users")
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      
-      // Pastikan data memiliki struktur yang benar
-      if (data && Array.isArray(data.data)) {
-        setUsers(data.data)
-      } else if (Array.isArray(data)) {
-        setUsers(data)
-      } else {
-        throw new Error("Format data tidak valid")
-      }
-    } catch (error) {
-      console.error("Error fetching users:", error)
-      setError(error instanceof Error ? error.message : "Gagal memuat data pengguna")
-      setUsers([]) // Set empty array jika error
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
+  // Menggunakan hook useCreateUser untuk membuat user baru
+  const { createUser: apiCreateUser, loading: isCreating, error: createError } = useCreateUser()
+  
   /**
    * Fungsi untuk create user baru
    */
   const createUser = async (userData: Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'passwordHash' | 'rolesUpdatedAt'>) => {
     try {
-      const response = await fetch("http://localhost:9999/api/v1/users", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(userData),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      // Pastikan data sesuai dengan tipe CreateUserData
+      const newUserData = {
+        name: userData.username, // Menambahkan name yang dibutuhkan oleh CreateUserData
+        ...userData,
+        departmentId: userData.departmentId || null,
+        region: userData.region || undefined,
+        level: userData.level || undefined
       }
-
-      const newUser = await response.json()
+      const newUser = await apiCreateUser(newUserData)
       
       // Refresh data setelah create
       await fetchUsers()
+      // Refresh data setelah create department
+      await fetchDepartments()
       
       return newUser
     } catch (error) {
@@ -154,24 +154,24 @@ export default function UserManagementPage() {
   /**
    * Fungsi untuk update user
    */
-  const updateUser = async (userId: number, userData: Partial<User>) => {
+  const updateUser = async (userId: string, userData: Partial<User>) => {
     try {
-      const response = await fetch(`http://localhost:9999/api/v1/users/${userId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(userData),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      // Buat instance hook untuk user yang dipilih
+      const { updateUser: apiUpdateUser } = useUpdateUser(userId)
+      
+      // Pastikan data sesuai dengan tipe UpdateUserData
+      const newUserData = {
+        ...userData,
+        departmentId: userData.departmentId || undefined,
+        region: userData.region || undefined,
+        level: userData.level || undefined
       }
-
-      const updatedUser = await response.json()
+      const updatedUser = await apiUpdateUser(newUserData)
       
       // Refresh data setelah update
       await fetchUsers()
+      // Refresh data setelah update department
+      await fetchDepartments()
       
       return updatedUser
     } catch (error) {
@@ -179,20 +179,47 @@ export default function UserManagementPage() {
       throw error
     }
   }
+  
+  /**
+   * Mengambil inisial dari nama pengguna
+   * @param {string} username - Nama pengguna
+   * @returns {string} Inisial dari nama pengguna (maksimal 2 karakter)
+   */
+  const getInitials = (username: string): string => {
+    if (!username) return '';
+    
+    const words = username.split(' ');
+    if (words.length === 1) {
+      return username.substring(0, 2).toUpperCase();
+    }
+    
+    return (words[0][0] + words[1][0]).toUpperCase();
+  };
+
+  /**
+   * Format tanggal ke format yang lebih mudah dibaca
+   * @param {string} dateString - String tanggal yang akan diformat
+   * @returns {string} Tanggal yang sudah diformat
+   */
+  const formatDate = (dateString: string): string => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
 
   /**
    * Fungsi untuk delete user
    */
-  const deleteUser = async (userId: number) => {
+  const deleteUser = async (userId: string) => {
     try {
-      const response = await fetch(`http://localhost:9999/api/v1/users/${userId}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
+      // Gunakan hook delete user
+      const { deleteUser: apiDeleteUser } = useDeleteUser()
+      
+      await apiDeleteUser(userId)
+      
       // Refresh data setelah delete
       await fetchUsers()
       
@@ -206,6 +233,7 @@ export default function UserManagementPage() {
   // Fetch data saat komponen dimount
   useEffect(() => {
     fetchUsers()
+    fetchDepartments()
   }, [])
 
   /**
@@ -213,26 +241,37 @@ export default function UserManagementPage() {
    */
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
+      console.log("filteredUsers", user)
       const matchesSearch = 
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (user.department && user.department.toLowerCase().includes(searchTerm.toLowerCase()))
+        (user.departmentId && user.departmentId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (user.region && user.region.toLowerCase().includes(searchTerm.toLowerCase()))
 
-      const matchesDepartment = departmentFilter === "all" || user.department === departmentFilter
+      const matchesDepartment = departmentFilter === "all" || user.departmentId === departmentFilter
       const matchesStatus = statusFilter === "all" || 
         (statusFilter === "active" && user.active) ||
         (statusFilter === "inactive" && !user.active)
-      const matchesLevel = levelFilter === "all" || user.level?.toString() === levelFilter
+      const matchesLevel = levelFilter === "all" || (user.level !== null && user.level.toString() === levelFilter)
 
       return matchesSearch && matchesDepartment && matchesStatus && matchesLevel
     })
   }, [users, searchTerm, departmentFilter, statusFilter, levelFilter])
 
   /**
+   * Mendapatkan nama departemen berdasarkan ID
+   */
+  const getDepartmentName = (departmentId: string | null) => {
+    if (!departmentId) return null
+    const department = departments.find(dept => dept.id === departmentId)
+    return department ? department.name : null
+  }
+
+  /**
    * Mendapatkan daftar unik untuk filter
    */
   const uniqueDepartments = useMemo(() => 
-    departments.map(dept => dept.name), [departments]
+    departments.map(dept => ({ id: dept.id, name: dept.name })), [departments]
   )
   
   const uniqueLevels = useMemo(() => 
@@ -275,126 +314,7 @@ export default function UserManagementPage() {
     setCurrentPage(1)
   }, [searchTerm, departmentFilter, statusFilter, levelFilter])
 
-  /**
-   * Fungsi untuk mendapatkan inisial nama
-   */
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map(word => word.charAt(0))
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
-  }
-
-  /**
-   * Fungsi untuk format tanggal
-   */
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("id-ID", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    })
-  }
-
-  /**
-   * Handler untuk aksi pengguna
-   */
-  const handleRowClick = (user: User) => {
-    router.push(`/users/${user.id}`)
-  }
-
-  const handleViewUser = (user: User) => {
-    setSelectedUser(user)
-    setIsViewModalOpen(true)
-  }
-
-  const handleEditUser = (user: User) => {
-    setSelectedUser(user)
-    setFormData({
-      name: user.name,
-      email: user.email,
-      department: user.department || "",
-      region: user.region || "",
-      level: user.level?.toString() || "",
-      active: user.active
-    })
-    setIsEditModalOpen(true)
-  }
-
-  const handleDeleteUser = (user: User) => {
-    setSelectedUser(user)
-    setIsDeleteModalOpen(true)
-  }
-
-  const handleAddUser = () => {
-    setFormData({
-      name: "",
-      email: "",
-      department: "",
-      region: "",
-      level: "",
-      active: true
-    })
-    setIsAddModalOpen(true)
-  }
-
-  /**
-   * Handler untuk form submission
-   */
-  const handleSaveUser = async () => {
-    try {
-      setIsLoading(true)
-      
-      if (selectedUser) {
-        // Update existing user
-        await updateUser(selectedUser.id, {
-          name: formData.name,
-          email: formData.email,
-          department: formData.department || null,
-          region: formData.region || null,
-          level: formData.level ? parseInt(formData.level) : null,
-          active: formData.active
-        })
-      } else {
-        // Create new user
-        await createUser({
-          name: formData.name,
-          email: formData.email,
-          department: formData.department || null,
-          region: formData.region || null,
-          level: formData.level ? parseInt(formData.level) : null,
-          active: formData.active
-        })
-      }
-      
-      setIsEditModalOpen(false)
-      setIsAddModalOpen(false)
-      setSelectedUser(null)
-    } catch (error) {
-      console.error("Error saving user:", error)
-      setError(error instanceof Error ? error.message : "Gagal menyimpan data pengguna")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleConfirmDelete = async () => {
-    if (!selectedUser) return
-    
-    try {
-      setIsLoading(true)
-      await deleteUser(selectedUser.id)
-      setIsDeleteModalOpen(false)
-      setSelectedUser(null)
-    } catch (error) {
-      console.error("Error deleting user:", error)
-      setError(error instanceof Error ? error.message : "Gagal menghapus pengguna")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  
 
   // Tampilkan skeleton loading saat data sedang dimuat
   if (isLoading) {
@@ -510,8 +430,8 @@ export default function UserManagementPage() {
               <SelectContent>
                 <SelectItem value="all">Semua Departemen</SelectItem>
                 {uniqueDepartments.map((dept) => (
-                  <SelectItem key={dept} value={dept}>
-                    {dept}
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -545,7 +465,7 @@ export default function UserManagementPage() {
              </Select>
 
             {/* Tombol Tambah Pengguna */}
-            <Button onClick={handleAddUser} className="w-full md:w-auto">
+            <Button onClick={() => handleAddUser(setFormData, setIsAddModalOpen)} className="w-full md:w-auto">
               <IconPlus className="mr-2 h-4 w-4" />
               Tambah Pengguna
             </Button>
@@ -592,18 +512,18 @@ export default function UserManagementPage() {
                     <TableRow 
                       key={user.id}
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => handleRowClick(user)}
+                      onClick={() => handleViewUser(user, setSelectedUser, setIsViewModalOpen)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={`/avatars/${user.id}.jpg`} />
                             <AvatarFallback className="text-xs">
-                              {getInitials(user.name)}
+                              {getInitials(user.username)}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="font-medium">{user.name}</div>
+                            <div className="font-medium">{user.username}</div>
                             <div className="text-sm text-muted-foreground">
                               {user.email}
                             </div>
@@ -611,7 +531,7 @@ export default function UserManagementPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                         <Badge variant="outline">{user.department || "N/A"}</Badge>
+                         <Badge variant="outline">{getDepartmentName(user.departmentId) || "N/A"}</Badge>
                        </TableCell>
                        <TableCell>{user.region || "N/A"}</TableCell>
                        <TableCell>
@@ -646,14 +566,14 @@ export default function UserManagementPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation()
-                              handleViewUser(user)
+                              handleViewUser(user, setSelectedUser, setIsViewModalOpen)
                             }}>
                               <IconEye className="mr-2 h-4 w-4" />
                               Lihat Detail
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation()
-                              handleEditUser(user)
+                              handleEditUser(user, setSelectedUser, setFormData, setIsEditModalOpen)
                             }}>
                               <IconEdit className="mr-2 h-4 w-4" />
                               Edit
@@ -661,7 +581,7 @@ export default function UserManagementPage() {
                             <DropdownMenuItem 
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleDeleteUser(user)
+                                handleDeleteUser(user, setSelectedUser, setIsDeleteModalOpen)
                               }}
                               className="text-red-600"
                             >
@@ -775,11 +695,11 @@ export default function UserManagementPage() {
                 <Avatar className="h-16 w-16">
                   <AvatarImage src={`/avatars/${selectedUser.id}.jpg`} />
                   <AvatarFallback className="text-lg">
-                    {getInitials(selectedUser.name)}
+                    {getInitials(selectedUser.username)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="text-lg font-semibold">{selectedUser.name}</h3>
+                  <h3 className="text-lg font-semibold">{selectedUser.username}</h3>
                   <p className="text-muted-foreground">{selectedUser.email}</p>
                 </div>
               </div>
@@ -799,7 +719,7 @@ export default function UserManagementPage() {
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Departemen</Label>
-                  <p className="text-sm text-muted-foreground">{selectedUser.department || "N/A"}</p>
+                  <p className="text-sm text-muted-foreground">{getDepartmentName(selectedUser.departmentId) || "N/A"}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Region</Label>
@@ -923,7 +843,16 @@ export default function UserManagementPage() {
             <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
               Batal
             </Button>
-            <Button onClick={handleSaveUser}>
+            <Button onClick={() => handleSaveUser(
+              selectedUser,
+              formData,
+              updateUser,
+              createUser,
+              setIsEditModalOpen,
+              setIsAddModalOpen,
+              setSelectedUser,
+              setError
+            )}>
               Simpan Perubahan
             </Button>
           </DialogFooter>
@@ -1019,7 +948,16 @@ export default function UserManagementPage() {
             <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
               Batal
             </Button>
-            <Button onClick={handleSaveUser}>
+            <Button onClick={() => handleSaveUser(
+              selectedUser,
+              formData,
+              updateUser,
+              createUser,
+              setIsEditModalOpen,
+              setIsAddModalOpen,
+              setSelectedUser,
+              setError
+            )}>
               Tambah Pengguna
             </Button>
           </DialogFooter>
@@ -1041,11 +979,11 @@ export default function UserManagementPage() {
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={`/avatars/${selectedUser.id}.jpg`} />
                   <AvatarFallback>
-                    {getInitials(selectedUser.name)}
+                    {getInitials(selectedUser.username)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium">{selectedUser.name}</p>
+                  <p className="font-medium">{selectedUser.username}</p>
                   <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
                 </div>
               </div>
@@ -1055,7 +993,13 @@ export default function UserManagementPage() {
             <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>
               Batal
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
+            <Button variant="destructive" onClick={() => handleConfirmDelete(
+              selectedUser,
+              deleteUser,
+              setIsDeleteModalOpen,
+              setSelectedUser,
+              setError
+            )}>
               Hapus Pengguna
             </Button>
           </DialogFooter>
