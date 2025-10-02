@@ -33,50 +33,51 @@ export const useAllUsers = (initialPage = 1, initialLimit = 10) => {
   const [total, setTotal] = useState(0);
 
   const fetchUsers = useCallback(async (
-    page = 1, 
-    limit = 10, 
-    filters?: { 
-      status?: string; 
-      role?: string; 
+    page = 1,
+    limit = 10,
+    filters?: {
+      status?: string;
+      role?: string;
       search?: string;
     }
   ) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const queryParams = new URLSearchParams();
       queryParams.append('page', page.toString());
       queryParams.append('limit', limit.toString());
-      
+
       if (filters?.status) {
         queryParams.append('status', filters.status);
       }
-      
+
       if (filters?.role) {
         queryParams.append('role', filters.role);
       }
-      
+
       if (filters?.search) {
         queryParams.append('search', filters.search);
       }
-      
+
       const response = await fetch(`/api/v2/users`);
       console.log(response)
-      
-      
+
+
       if (!response.ok) {
         throw new Error(`Error fetching users: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      console.log(data)
       
-      setUsers(data.users || []);
-      setTotal(data.users?.length || 0);
+      console.log("data.data", data.data)
+
+      setUsers(data.data || []);
+      setTotal(data.data?.length || 0);
       setPage(page);
       setLimit(limit);
-      
+
       return data;
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Unknown error occurred'));
