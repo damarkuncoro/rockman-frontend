@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useUserDetail } from "@/hooks/api/v2/users/[id]/show.hook"
+import { useUserDetail, User as ApiUser } from "@/hooks/api/v2/users/[id]/show.hook.v2"
 import { useUserRoles } from "@/hooks/api/v2/users/[id]/roles"
 import { useUserAddresses } from "@/hooks/api/v2/users/[id]/addresses"
 import { useUserPhones } from "@/hooks/api/v2/users/[id]/phones"
@@ -42,18 +42,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shadcn/ui
 /**
  * Interface untuk data pengguna
  */
-interface User {
-  id: number
-  name: string
-  email: string
-  passwordHash: string
-  active: boolean
-  rolesUpdatedAt: string | null
-  department: string | null
-  region: string | null
-  level: number | null
-  createdAt: string
-  updatedAt: string
+interface User extends ApiUser {
+  // Mapped properties
+  name: string;
+  department: string | null;
 }
 
 /**
@@ -178,6 +170,98 @@ interface UserSession {
 }
 
 /**
+ * Komponen untuk menampilkan informasi dasar pengguna
+ */
+const UserInfoCard = ({ user, isLoading }: { user: User | null, isLoading: boolean }) => {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle><Skeleton className="h-8 w-3/4" /></CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!user) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Informasi Pengguna</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <IconAlertCircle className="h-4 w-4" />
+            <AlertDescription>Data pengguna tidak ditemukan</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Informasi Pengguna</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center space-x-4">
+          <Avatar className="h-16 w-16">
+            <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.username}`} alt={user.username} />
+            <AvatarFallback>{user.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div>
+            <h3 className="text-xl font-bold">{user.username}</h3>
+            <p className="text-sm text-muted-foreground">
+              {user.active ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  <IconUserCheck className="mr-1 h-3 w-3" /> Aktif
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                  <IconUserX className="mr-1 h-3 w-3" /> Tidak Aktif
+                </Badge>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="flex items-start space-x-2">
+            <IconMail className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Email</p>
+              <p className="text-sm text-muted-foreground">{user.email}</p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <IconBuilding className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Departemen</p>
+              <p className="text-sm text-muted-foreground">
+                {user.primaryDepartment?.name || 'Tidak ada departemen'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <IconMapPin className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Region</p>
+              <p className="text-sm text-muted-foreground">{user.region || 'Tidak diatur'}</p>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
  * Komponen halaman detail pengguna
  */
 export default function UserDetailPage() {
@@ -213,7 +297,7 @@ export default function UserDetailPage() {
   /**
    * Menggunakan hook untuk mengambil data pengguna dan data terkait
    */
-  const { user: userDetail, loading: userLoading, error: userError, fetchUserDetail } = useUserDetail()
+  const { data: userDetailResponse, loading: userLoading, error: userError, refetch: fetchUserDetail } = useUserDetail(userId)
   const { roles: userRolesData, loading: rolesLoading, error: roleErrorHook, fetchUserRoles: fetchUserRolesData } = useUserRoles()
   const { addresses: addressesData, loading: addressesLoading, error: addressErrorHook, fetchUserAddresses } = useUserAddresses()
   const { phones: phonesData, loading: phonesLoading, error: phoneErrorHook, fetchUserPhones } = useUserPhones()
@@ -222,6 +306,14 @@ export default function UserDetailPage() {
 
   // Menggunakan data dari hook
   React.useEffect(() => {
+    if (userDetailResponse) {
+      const userData = userDetailResponse.data;
+      setUser({
+        ...userData,
+        name: userData.username,
+        department: userData.primaryDepartment?.name || null,
+      });
+    }
     if (addressesData) {
       setAddresses(addressesData as Address[]);
     }
@@ -245,7 +337,7 @@ export default function UserDetailPage() {
       }));
       setSessions(convertedSessions);
     }
-  }, [addressesData, phonesData, userRolesData, sessionsData]);
+  }, [userDetailResponse, addressesData, phonesData, userRolesData, sessionsData]);
 
   /**
    * Fungsi untuk mengambil data nomor telepon pengguna dari API
@@ -263,7 +355,7 @@ export default function UserDetailPage() {
       setIsLoadingAccessLogs(true)
       setAccessLogError(null)
       
-      const response = await fetch(`http://localhost:9999/api/v1/users/${id}/access-logs`)
+      const response = await fetch(`/api/v2/users/${id}/access-logs`)
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -318,14 +410,14 @@ export default function UserDetailPage() {
   // Fetch data pengguna saat komponen dimuat
   React.useEffect(() => {
     if (userId) {
-      fetchUserDetail(userId)
+      fetchUserDetail()
       fetchUserRolesData(userId)
       fetchUserAddresses(userId)
       fetchUserPhones(userId)
       fetchUserSessions(userId)
       fetchChangeHistories(userId)
     }
-  }, [userId, fetchUserDetail, fetchUserRolesData, fetchUserAddresses, fetchUserPhones, fetchUserSessions, fetchChangeHistories])
+  }, [userId, fetchUserRolesData, fetchUserAddresses, fetchUserPhones, fetchUserSessions, fetchChangeHistories])
 
   /**
    * Fungsi untuk mendapatkan inisial nama
@@ -540,7 +632,7 @@ export default function UserDetailPage() {
         </Alert>
 
         <div className="flex justify-center">
-          <Button onClick={() => fetchUserDetail(userId)}>
+          <Button onClick={() => fetchUserDetail()}>
             Coba Lagi
           </Button>
         </div>
@@ -654,7 +746,7 @@ export default function UserDetailPage() {
                   )}
                 </Badge>
                 {user.level && (
-                  <Badge 
+                  <Badge
                     variant={user.level >= 8 ? "default" : "secondary"}
                   >
                     <IconShield className="mr-1 h-3 w-3" />
@@ -851,7 +943,7 @@ export default function UserDetailPage() {
                   </label>
                   <p className="text-sm mt-1">
                     {user.level ? (
-                      <Badge 
+                      <Badge
                         variant={user.level >= 8 ? "default" : "secondary"}
                       >
                         Level {user.level}

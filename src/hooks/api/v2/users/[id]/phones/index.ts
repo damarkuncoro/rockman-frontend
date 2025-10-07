@@ -36,6 +36,7 @@ export const useUserPhones = (userId?: string) => {
     setError(null);
     
     try {
+      
       const response = await fetch(`/api/v2/users/${targetId}/phones`);
       
       if (!response.ok) {

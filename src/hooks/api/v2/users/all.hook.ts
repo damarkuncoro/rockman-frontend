@@ -10,7 +10,8 @@ export interface User {
   passwordHash: string;
   active: boolean;
   rolesUpdatedAt: string | null;
-  departmentId: string | null;
+  departmentId?: string | null;
+  primaryDepartmentId?: string | null;
   region: string | null;
   level: number | null;
   createdAt: string;

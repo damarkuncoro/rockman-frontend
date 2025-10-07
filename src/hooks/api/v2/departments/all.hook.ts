@@ -30,19 +30,7 @@ export const useAllDepartments = (initialPage = 1, initialLimit = 10) => {
     setError(null);
     
     try {
-      const queryParams = new URLSearchParams();
-      queryParams.append('page', page.toString());
-      queryParams.append('limit', limit.toString());
-      
-      if (filters?.search) {
-        queryParams.append('search', filters.search);
-      }
-      
-      if (filters?.isActive !== undefined) {
-        queryParams.append('isActive', filters.isActive.toString());
-      }
-      
-      // API v2 tidak menghandle query params, jadi kita tidak mengirimkannya
+      // Tidak menggunakan query params
       const response = await fetch(`/api/v2/departments`);
       console.log(response)
       if (!response.ok) {
@@ -50,8 +38,9 @@ export const useAllDepartments = (initialPage = 1, initialLimit = 10) => {
       }
       
       const data = await response.json();
-      setDepartments(data.departments || []);
-      setTotal(data.meta?.total || data.departments?.length || 0);
+      console.log(data, 'data')
+      setDepartments(data.data || []);
+      setTotal(data.meta?.total || data.data?.length || 0);
       setPage(page);
       setLimit(limit);
       

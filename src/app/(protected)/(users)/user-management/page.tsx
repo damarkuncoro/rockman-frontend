@@ -1,47 +1,30 @@
 "use client"
 
 import * as React from "react"
-import { useState, useMemo, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import {
-  IconSearch,
-  IconPlus,
-  IconEdit,
-  IconTrash,
-  IconEye,
-  IconFilter,
-  IconUsers,
-  IconUserCheck,
-  IconUserX,
-  IconCalendar,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronsLeft,
-  IconChevronsRight,
-} from "@tabler/icons-react"
 
-import { handleAddUser } from "./(actions)/handleAddUser"
-import { handleEditUser } from "./(actions)/handleEditUser"
-import { handleDeleteUser } from "./(actions)/handleDeleteUser"
-import { handleSaveUser } from "./(actions)/handleSaveUser"
-import { handleViewUser } from "./(actions)/handleViewUser"
-import { handleConfirmDelete } from "./(actions)/handleConfirmDelete"
-
+// Import komponen UI
 import { Badge } from "@/components/shadcn/ui/badge"
 import { Button } from "@/components/shadcn/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/shadcn/ui/card"
 import { Input } from "@/components/shadcn/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shadcn/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/shadcn/ui/avatar"
+import { SkeletonUserManagement } from "@/components/skeletons/SkeletonUserManagement"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shadcn/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/shadcn/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/shadcn/ui/dialog"
-import { Label } from "@/components/shadcn/ui/label"
-import { Textarea } from "@/components/shadcn/ui/textarea"
-import { Switch } from "@/components/shadcn/ui/switch"
-import { SkeletonUserManagement } from "@/components/skeleton-user-management"
-import { useAllDepartments } from "@/hooks/api/v2/departments/"
-import { useAllUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/api/v2/users/"
+import { IconEdit, IconEye, IconFilter, IconPlus, IconSearch, IconTrash, IconUsers } from "@tabler/icons-react"
+
+// Import komponen yang telah dipisahkan
+import { UserManagementStats } from '@/components/users/UserManagementStats'
+import { UserManagementPagination } from '@/components/users/UserManagementPagination'
+import { DepartmentName } from "./components/DepartmentName"
+import { UserAddModal } from "@/components/users/UserAddModal"
+import { UserDeleteModal } from "@/components/users/UserDeleteModal"
+import { UserEditModal } from "@/components/users/UserEditModal"
+import { UserViewModal } from "@/components/users/UserViewModal"
+
+// Import custom hook untuk logika
+import { useUserManagement } from '@/hooks/users/useUserManagement';
 
 /**
  * Interface untuk data pengguna dari API v2
@@ -53,9 +36,33 @@ interface User {
   passwordHash: string;
   active: boolean;
   rolesUpdatedAt: string | null;
-  departmentId: string | null;
+  primaryDepartmentId?: string | null;
   region: string | null;
   level: number | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  addresses: any[];
+  phones: any[];
+  identities: any[];
+  roles: any[];
+  departments: Department[];
+  primaryDepartment?: Department;
+}
+
+/**
+ * Interface untuk data departemen
+ */
+interface Department {
+  id: string;
+  name: string;
+  description: string;
+  slug: string;
+  code: string;
+  color: string;
+  icon: string;
+  isActive: boolean;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -63,259 +70,65 @@ interface User {
 
 /**
  * Komponen utama dashboard manajemen pengguna
+ * Mengimplementasikan prinsip SRP dengan memisahkan UI dan logika
  */
 export default function UserManagementPage() {
-  const router = useRouter()
-  const [searchTerm, setSearchTerm] = useState("")
-  const [departmentFilter, setDepartmentFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [levelFilter, setLevelFilter] = useState("all")
-  
-  // Hook untuk departments dari API v2
-  const { 
-    departments, 
-    loading: isDepartmentsLoading, 
-    error: departmentsError,
-    fetchDepartments
-  } = useAllDepartments()
-  
-  // Menggunakan hook useAllUsers untuk fetch data users
-  const { 
-    users, 
-    loading: isLoading, 
-    error: usersError, 
-    page: currentPage, 
-    limit: itemsPerPage, 
-    total,
-    fetchUsers,
-    setPage: setCurrentPage,
-    setLimit: setItemsPerPage
-  } = useAllUsers(1, 10)
-  
-  // Error state untuk UI
-  const [error, setError] = useState<string | null>(null)
-
-  // Update error state ketika ada error dari hook
-  useEffect(() => {
-    if (usersError) {
-      setError(usersError.message || "Gagal memuat data pengguna")
-    } else {
-      setError(null)
-    }
-  }, [usersError])
-
-  // State untuk modal
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-
-  // State untuk form edit/add
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    department: "",
-    region: "",
-    level: "",
-    active: true
-  })
-
-  // Menggunakan hook useCreateUser untuk membuat user baru
-  const { createUser: apiCreateUser, loading: isCreating, error: createError } = useCreateUser()
-  
-  /**
-   * Fungsi untuk create user baru
-   */
-  const createUser = async (userData: Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'passwordHash' | 'rolesUpdatedAt'>) => {
-    try {
-      // Pastikan data sesuai dengan tipe CreateUserData
-      const newUserData = {
-        name: userData.username, // Menambahkan name yang dibutuhkan oleh CreateUserData
-        ...userData,
-        departmentId: userData.departmentId || null,
-        region: userData.region || undefined,
-        level: userData.level || undefined
-      }
-      const newUser = await apiCreateUser(newUserData)
-      
-      // Refresh data setelah create
-      await fetchUsers()
-      // Refresh data setelah create department
-      await fetchDepartments()
-      
-      return newUser
-    } catch (error) {
-      console.error("Error creating user:", error)
-      throw error
-    }
-  }
-
-  /**
-   * Fungsi untuk update user
-   */
-  const updateUser = async (userId: string, userData: Partial<User>) => {
-    try {
-      // Buat instance hook untuk user yang dipilih
-      const { updateUser: apiUpdateUser } = useUpdateUser(userId)
-      
-      // Pastikan data sesuai dengan tipe UpdateUserData
-      const newUserData = {
-        ...userData,
-        departmentId: userData.departmentId || undefined,
-        region: userData.region || undefined,
-        level: userData.level || undefined
-      }
-      const updatedUser = await apiUpdateUser(newUserData)
-      
-      // Refresh data setelah update
-      await fetchUsers()
-      // Refresh data setelah update department
-      await fetchDepartments()
-      
-      return updatedUser
-    } catch (error) {
-      console.error("Error updating user:", error)
-      throw error
-    }
-  }
-  
-  /**
-   * Mengambil inisial dari nama pengguna
-   * @param {string} username - Nama pengguna
-   * @returns {string} Inisial dari nama pengguna (maksimal 2 karakter)
-   */
-  const getInitials = (username: string): string => {
-    if (!username) return '';
+  // Menggunakan custom hook untuk semua logika manajemen pengguna
+  const userManagement = useUserManagement();
+  const {
+    // Data
+    users,
+    departments,
+    isLoading,
+    error,
+    setError,
     
-    const words = username.split(' ');
-    if (words.length === 1) {
-      return username.substring(0, 2).toUpperCase();
-    }
+    // Filter dan pencarian
+    searchTerm,
+    setSearchTerm,
+    departmentFilter,
+    setDepartmentFilter,
+    statusFilter,
+    setStatusFilter,
+    levelFilter,
+    setLevelFilter,
     
-    return (words[0][0] + words[1][0]).toUpperCase();
-  };
-
-  /**
-   * Format tanggal ke format yang lebih mudah dibaca
-   * @param {string} dateString - String tanggal yang akan diformat
-   * @returns {string} Tanggal yang sudah diformat
-   */
-  const formatDate = (dateString: string): string => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('id-ID', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  /**
-   * Fungsi untuk delete user
-   */
-  const deleteUser = async (userId: string) => {
-    try {
-      // Gunakan hook delete user
-      const { deleteUser: apiDeleteUser } = useDeleteUser()
-      
-      await apiDeleteUser(userId)
-      
-      // Refresh data setelah delete
-      await fetchUsers()
-      
-      return true
-    } catch (error) {
-      console.error("Error deleting user:", error)
-      throw error
-    }
-  }
-
-  // Fetch data saat komponen dimount
-  useEffect(() => {
-    fetchUsers()
-    fetchDepartments()
-  }, [])
-
-  /**
-   * Filter dan pencarian pengguna
-   */
-  const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      console.log("filteredUsers", user)
-      const matchesSearch = 
-        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (user.departmentId && user.departmentId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (user.region && user.region.toLowerCase().includes(searchTerm.toLowerCase()))
-
-      const matchesDepartment = departmentFilter === "all" || user.departmentId === departmentFilter
-      const matchesStatus = statusFilter === "all" || 
-        (statusFilter === "active" && user.active) ||
-        (statusFilter === "inactive" && !user.active)
-      const matchesLevel = levelFilter === "all" || (user.level !== null && user.level.toString() === levelFilter)
-
-      return matchesSearch && matchesDepartment && matchesStatus && matchesLevel
-    })
-  }, [users, searchTerm, departmentFilter, statusFilter, levelFilter])
-
-  /**
-   * Mendapatkan nama departemen berdasarkan ID
-   */
-  const getDepartmentName = (departmentId: string | null) => {
-    if (!departmentId) return null
-    const department = departments.find(dept => dept.id === departmentId)
-    return department ? department.name : null
-  }
-
-  /**
-   * Mendapatkan daftar unik untuk filter
-   */
-  const uniqueDepartments = useMemo(() => 
-    departments.map(dept => ({ id: dept.id, name: dept.name })), [departments]
-  )
-  
-  const uniqueLevels = useMemo(() => 
-    [...new Set(users.map(user => user.level).filter(level => level !== null))], [users]
-  )
-
-  /**
-   * Statistik pengguna
-   */
-  const stats = useMemo(() => {
-    const totalUsers = users.length
-    const activeUsers = users.filter(user => user.active).length
-    const inactiveUsers = totalUsers - activeUsers
-    const departmentsCount = departments.length
-
-    return { totalUsers, activeUsers, inactiveUsers, departments: departmentsCount }
-  }, [users, departments])
-
-  /**
-   * Pagination logic
-   */
-  const paginatedUsers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage
-    const endIndex = startIndex + itemsPerPage
-    return filteredUsers.slice(startIndex, endIndex)
-  }, [filteredUsers, currentPage, itemsPerPage])
-
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage)
-
-  /**
-   * Pagination handlers
-   */
-  const goToFirstPage = () => setCurrentPage(1)
-  const goToLastPage = () => setCurrentPage(totalPages)
-  const goToPreviousPage = () => setCurrentPage(prev => Math.max(prev - 1, 1))
-  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages))
-
-  // Reset ke halaman pertama ketika filter berubah
-  React.useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, departmentFilter, statusFilter, levelFilter])
-
-  
-
+    // Pagination
+    currentPage,
+    totalPages,
+    goToFirstPage,
+    goToLastPage,
+    goToPreviousPage,
+    goToNextPage,
+    // Modal
+    isAddModalOpen,
+    setIsAddModalOpen,
+    isEditModalOpen,
+    setIsEditModalOpen,
+    isViewModalOpen,
+    setIsViewModalOpen,
+    isDeleteModalOpen,
+    setIsDeleteModalOpen,
+    selectedUser,
+    formData,
+    setFormData,
+    
+    // Fungsi
+    formatDate,
+    handleAddUser,
+    handleViewUser,
+    handleEditUser,
+    handleDeleteUser,
+    handleDeleteConfirm,
+    getInitials,
+    
+    // Data yang sudah diproses
+    filteredUsers,
+    paginatedUsers,
+    uniqueDepartments,
+    uniqueLevels,
+    stats
+  } = userManagement;
   // Tampilkan skeleton loading saat data sedang dimuat
   if (isLoading) {
     return <SkeletonUserManagement />
@@ -347,59 +160,7 @@ export default function UserManagementPage() {
       )}
 
       {/* Statistik Cards */}
-      <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
-            <IconUsers className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalUsers}</div>
-            <p className="text-xs text-muted-foreground">
-              Semua pengguna terdaftar
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pengguna Aktif</CardTitle>
-            <IconUserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.activeUsers}</div>
-            <p className="text-xs text-muted-foreground">
-              {((stats.activeUsers / stats.totalUsers) * 100).toFixed(1)}% dari total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pengguna Nonaktif</CardTitle>
-            <IconUserX className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.inactiveUsers}</div>
-            <p className="text-xs text-muted-foreground">
-              {((stats.inactiveUsers / stats.totalUsers) * 100).toFixed(1)}% dari total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Departemen</CardTitle>
-            <IconCalendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.departments}</div>
-            <p className="text-xs text-muted-foreground">
-              Departemen aktif
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <UserManagementStats stats={stats} />
 
       {/* Filter dan Pencarian */}
       <Card>
@@ -450,22 +211,22 @@ export default function UserManagementPage() {
             </Select>
 
             {/* Filter Level */}
-             <Select value={levelFilter} onValueChange={setLevelFilter}>
-               <SelectTrigger className="w-full md:w-[150px]">
-                 <SelectValue placeholder="Level" />
-               </SelectTrigger>
-               <SelectContent>
-                 <SelectItem value="all">Semua Level</SelectItem>
-                 {uniqueLevels.map((level) => (
-                   <SelectItem key={level} value={level.toString()}>
-                     Level {level}
-                   </SelectItem>
-                 ))}
-               </SelectContent>
-             </Select>
+            <Select value={levelFilter} onValueChange={setLevelFilter}>
+              <SelectTrigger className="w-full md:w-[150px]">
+                <SelectValue placeholder="Level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Level</SelectItem>
+                {uniqueLevels.map((level) => (
+                  <SelectItem key={level} value={level.toString()}>
+                    Level {level}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {/* Tombol Tambah Pengguna */}
-            <Button onClick={() => handleAddUser(setFormData, setIsAddModalOpen)} className="w-full md:w-auto">
+            <Button onClick={() => handleAddUser()} className="w-full md:w-auto">
               <IconPlus className="mr-2 h-4 w-4" />
               Tambah Pengguna
             </Button>
@@ -509,10 +270,10 @@ export default function UserManagementPage() {
                   </TableRow>
                 ) : (
                   paginatedUsers.map((user) => (
-                    <TableRow 
+                    <TableRow
                       key={user.id}
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => handleViewUser(user, setSelectedUser, setIsViewModalOpen)}
+                      onClick={() => handleViewUser(user)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -531,18 +292,20 @@ export default function UserManagementPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                         <Badge variant="outline">{getDepartmentName(user.departmentId) || "N/A"}</Badge>
-                       </TableCell>
-                       <TableCell>{user.region || "N/A"}</TableCell>
-                       <TableCell>
-                         <Badge 
-                           variant={user.level && user.level >= 8 ? "default" : "secondary"}
-                         >
-                           {user.level ? `Level ${user.level}` : "N/A"}
-                         </Badge>
-                       </TableCell>
+                        <Badge variant="outline">
+                          <DepartmentName userId={user.id} departmentId={user.departmentId || user.primaryDepartmentId || null} />
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{user.region || "N/A"}</TableCell>
                       <TableCell>
-                        <Badge 
+                        <Badge
+                          variant={user.level && user.level >= 8 ? "default" : "secondary"}
+                        >
+                          {user.level ? `Level ${user.level}` : "N/A"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
                           variant={user.active ? "default" : "destructive"}
                           className={user.active ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}
                         >
@@ -555,8 +318,8 @@ export default function UserManagementPage() {
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild suppressHydrationWarning>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -566,22 +329,22 @@ export default function UserManagementPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation()
-                              handleViewUser(user, setSelectedUser, setIsViewModalOpen)
+                              handleViewUser(user)
                             }}>
                               <IconEye className="mr-2 h-4 w-4" />
                               Lihat Detail
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation()
-                              handleEditUser(user, setSelectedUser, setFormData, setIsEditModalOpen)
+                              handleEditUser(user)
                             }}>
                               <IconEdit className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleDeleteUser(user, setSelectedUser, setIsDeleteModalOpen)
+                                handleDeleteConfirm()
                               }}
                               className="text-red-600"
                             >
@@ -597,414 +360,62 @@ export default function UserManagementPage() {
               </TableBody>
             </Table>
           </div>
-          
+
           {/* Pagination Controls */}
           {filteredUsers.length > 0 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t">
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-muted-foreground">
-                  Menampilkan {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} dari {filteredUsers.length} pengguna
-                </p>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <p className="text-sm text-muted-foreground">Baris per halaman:</p>
-                  <Select
-                    value={itemsPerPage.toString()}
-                    onValueChange={(value) => {
-                      setItemsPerPage(Number(value))
-                      setCurrentPage(1)
-                    }}
-                  >
-                    <SelectTrigger className="w-16 h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToFirstPage}
-                    disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
-                  >
-                    <IconChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToPreviousPage}
-                    disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
-                  >
-                    <IconChevronLeft className="h-4 w-4" />
-                  </Button>
-                  
-                  <div className="flex items-center gap-1 mx-2">
-                    <p className="text-sm text-muted-foreground">
-                      Halaman {currentPage} dari {totalPages}
-                    </p>
-                  </div>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToNextPage}
-                    disabled={currentPage === totalPages}
-                    className="h-8 w-8 p-0"
-                  >
-                    <IconChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToLastPage}
-                    disabled={currentPage === totalPages}
-                    className="h-8 w-8 p-0"
-                  >
-                    <IconChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <UserManagementPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              goToFirstPage={goToFirstPage}
+              goToPreviousPage={goToPreviousPage}
+              goToNextPage={goToNextPage}
+              goToLastPage={goToLastPage}
+            />
           )}
         </CardContent>
       </Card>
 
-      {/* Modal Detail Pengguna */}
-      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Detail Pengguna</DialogTitle>
-            <DialogDescription>
-              Informasi lengkap pengguna sistem
-            </DialogDescription>
-          </DialogHeader>
-          {selectedUser && (
-            <div className="grid gap-4 py-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={`/avatars/${selectedUser.id}.jpg`} />
-                  <AvatarFallback className="text-lg">
-                    {getInitials(selectedUser.username)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="text-lg font-semibold">{selectedUser.username}</h3>
-                  <p className="text-muted-foreground">{selectedUser.email}</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-8">
-                <div>
-                  <Label className="text-sm font-medium">ID Pengguna</Label>
-                  <p className="text-sm text-muted-foreground">{selectedUser.id}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Status</Label>
-                  <div className="mt-1">
-                    <Badge variant={selectedUser.active ? "default" : "destructive"}>
-                      {selectedUser.active ? "Aktif" : "Nonaktif"}
-                    </Badge>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Departemen</Label>
-                  <p className="text-sm text-muted-foreground">{getDepartmentName(selectedUser.departmentId) || "N/A"}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Region</Label>
-                  <p className="text-sm text-muted-foreground">{selectedUser.region || "N/A"}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Level</Label>
-                  <p className="text-sm text-muted-foreground">{selectedUser.level ? `Level ${selectedUser.level}` : "N/A"}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Dibuat</Label>
-                  <p className="text-sm text-muted-foreground">{formatDate(selectedUser.createdAt)}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Diperbarui</Label>
-                  <p className="text-sm text-muted-foreground">{formatDate(selectedUser.updatedAt)}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Role Diperbarui</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedUser.rolesUpdatedAt ? formatDate(selectedUser.rolesUpdatedAt) : "N/A"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewModalOpen(false)}>
-              Tutup
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Modals */}
+      <UserAddModal 
+        isOpen={isAddModalOpen}
+        setIsOpen={setIsAddModalOpen}
+        formData={formData}
+        setFormData={setFormData}
+        departments={departments}
+        uniqueLevels={uniqueLevels}
+        handleSaveUser={handleAddUser}
+        setError={setError}
+      />
 
-      {/* Modal Edit Pengguna */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Pengguna</DialogTitle>
-            <DialogDescription>
-              Ubah informasi pengguna sistem
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-name">Nama Lengkap</Label>
-                <Input
-                  id="edit-name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="Masukkan nama lengkap"
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-email">Email</Label>
-                <Input
-                  id="edit-email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  placeholder="Masukkan email"
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-department">Departemen</Label>
-                <Select value={formData.department} onValueChange={(value) => setFormData({...formData, department: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih departemen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.name}>
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: dept.color }}
-                          />
-                          {dept.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit-region">Region</Label>
-                <Input
-                  id="edit-region"
-                  value={formData.region}
-                  onChange={(e) => setFormData({...formData, region: e.target.value})}
-                  placeholder="Masukkan region"
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-level">Level</Label>
-                <Select value={formData.level} onValueChange={(value) => setFormData({...formData, level: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uniqueLevels.map((level) => (
-                      <SelectItem key={level} value={level.toString()}>
-                        Level {level}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="edit-active"
-                  checked={formData.active}
-                  onCheckedChange={(checked) => setFormData({...formData, active: checked})}
-                />
-                <Label htmlFor="edit-active">Status Aktif</Label>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
-              Batal
-            </Button>
-            <Button onClick={() => handleSaveUser(
-              selectedUser,
-              formData,
-              updateUser,
-              createUser,
-              setIsEditModalOpen,
-              setIsAddModalOpen,
-              setSelectedUser,
-              setError
-            )}>
-              Simpan Perubahan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UserEditModal 
+        isOpen={isEditModalOpen}
+        setIsOpen={setIsEditModalOpen}
+        user={selectedUser}
+        formData={formData}
+        setFormData={setFormData}
+        departments={departments}
+        uniqueLevels={uniqueLevels}
+        handleSaveUser={handleEditUser}
+        setError={setError}
+      />
 
-      {/* Modal Tambah Pengguna */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Tambah Pengguna Baru</DialogTitle>
-            <DialogDescription>
-              Buat pengguna baru untuk sistem
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="add-name">Nama Lengkap</Label>
-                <Input
-                  id="add-name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="Masukkan nama lengkap"
-                />
-              </div>
-              <div>
-                <Label htmlFor="add-email">Email</Label>
-                <Input
-                  id="add-email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  placeholder="Masukkan email"
-                />
-              </div>
-              <div>
-                <Label htmlFor="add-department">Departemen</Label>
-                <Select value={formData.department} onValueChange={(value) => setFormData({...formData, department: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih departemen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.name}>
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: dept.color }}
-                          />
-                          {dept.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="add-region">Region</Label>
-                <Input
-                  id="add-region"
-                  value={formData.region}
-                  onChange={(e) => setFormData({...formData, region: e.target.value})}
-                  placeholder="Masukkan region"
-                />
-              </div>
-              <div>
-                <Label htmlFor="add-level">Level</Label>
-                <Select value={formData.level} onValueChange={(value) => setFormData({...formData, level: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uniqueLevels.map((level) => (
-                      <SelectItem key={level} value={level.toString()}>
-                        Level {level}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="add-active"
-                  checked={formData.active}
-                  onCheckedChange={(checked) => setFormData({...formData, active: checked})}
-                />
-                <Label htmlFor="add-active">Status Aktif</Label>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
-              Batal
-            </Button>
-            <Button onClick={() => handleSaveUser(
-              selectedUser,
-              formData,
-              updateUser,
-              createUser,
-              setIsEditModalOpen,
-              setIsAddModalOpen,
-              setSelectedUser,
-              setError
-            )}>
-              Tambah Pengguna
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UserViewModal 
+        isOpen={isViewModalOpen}
+        setIsOpen={setIsViewModalOpen}
+        user={selectedUser}
+        departments={departments}
+        getInitials={getInitials}
+        formatDate={formatDate}
+      />
 
-      {/* Modal Konfirmasi Hapus */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Konfirmasi Hapus Pengguna</DialogTitle>
-            <DialogDescription>
-              Apakah Anda yakin ingin menghapus pengguna ini? Tindakan ini tidak dapat dibatalkan.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedUser && (
-            <div className="py-4">
-              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={`/avatars/${selectedUser.id}.jpg`} />
-                  <AvatarFallback>
-                    {getInitials(selectedUser.username)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{selectedUser.username}</p>
-                  <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>
-              Batal
-            </Button>
-            <Button variant="destructive" onClick={() => handleConfirmDelete(
-              selectedUser,
-              deleteUser,
-              setIsDeleteModalOpen,
-              setSelectedUser,
-              setError
-            )}>
-              Hapus Pengguna
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UserDeleteModal 
+        isOpen={isDeleteModalOpen}
+        setIsOpen={setIsDeleteModalOpen}
+        user={selectedUser}
+        getInitials={getInitials}
+        handleConfirmDelete={async () => await handleDeleteUser()}
+        setError={setError}
+      />
     </div>
   )
 }
