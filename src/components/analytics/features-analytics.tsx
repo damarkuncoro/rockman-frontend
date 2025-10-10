@@ -84,7 +84,7 @@ export function FeaturesAnalytics() {
         setLoading(true)
         
         // Fetch features data dari API
-        const response = await fetch('http://localhost:9999/api/v1/features')
+        const response = await fetch('/api/v2/features')
         const features = await response.json()
         
         // Simulasi data analytics berdasarkan data features

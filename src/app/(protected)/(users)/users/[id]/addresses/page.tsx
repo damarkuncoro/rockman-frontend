@@ -143,19 +143,18 @@ export default function UserAddressesPage() {
         throw new Error('User ID tidak ditemukan')
       }
 
-      const response = await fetch(`http://localhost:9998/api/v1/users/${userId}/addresses`)
+      const response = await fetch(`/api/v2/users/${userId}/addresses`)
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       
       const result = await response.json()
-      
-      if (result.success) {
-        setAddresses(result.data || [])
-      } else {
-        throw new Error(result.message || 'Gagal mengambil data alamat')
-      }
+      // v2 API dapat mengembalikan bentuk tanpa field `success`, gunakan fallback aman
+      const addressesData = Array.isArray(result)
+        ? result
+        : ("data" in result ? result.data : [])
+      setAddresses(addressesData || [])
     } catch (err) {
       console.error('Error fetching addresses:', err)
       setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil data alamat')
@@ -169,7 +168,7 @@ export default function UserAddressesPage() {
    */
   const handleAddAddress = async () => {
     try {
-      const response = await fetch(`http://localhost:9998/api/v1/users/${userId}/addresses`, {
+      const response = await fetch(`/api/v2/users/${userId}/addresses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,7 +199,7 @@ export default function UserAddressesPage() {
     try {
       if (!selectedAddress) return
 
-      const response = await fetch(`http://localhost:9998/api/v1/users/${userId}/addresses/${selectedAddress.id}`, {
+      const response = await fetch(`/api/v2/users/${userId}/addresses/${selectedAddress.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -232,7 +231,7 @@ export default function UserAddressesPage() {
     try {
       if (!selectedAddress) return
 
-      const response = await fetch(`http://localhost:9998/api/v1/users/${userId}/addresses/${selectedAddress.id}`, {
+      const response = await fetch(`/api/v2/users/${userId}/addresses/${selectedAddress.id}`, {
         method: 'DELETE',
       })
 
@@ -257,7 +256,7 @@ export default function UserAddressesPage() {
    */
   const handleSetDefault = async (address: UserAddress) => {
     try {
-      const response = await fetch(`http://localhost:9998/api/v1/users/${userId}/addresses/${address.id}`, {
+      const response = await fetch(`/api/v2/users/${userId}/addresses/${address.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

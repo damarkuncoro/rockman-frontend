@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { cache } from "./cache";
+import { getAuthToken, isTokenExpired, refreshAuthToken } from "./auth";
 
 export type UseFetchOptions<T> = {
   /** Interval revalidasi otomatis dalam milidetik (0 = tidak ada revalidasi) */
@@ -108,15 +109,49 @@ export function useFetch<T = any>(
     const currentFetchCount = fetchCountRef.current;
 
     try {
-      const res = await fetch(url, { 
-        ...fetchOptions,
-        signal: controller.signal 
-      });
-      
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      let token = getAuthToken();
+
+      // Jika token ada dan sudah kadaluarsa, coba refresh terlebih dahulu
+      if (token && isTokenExpired(token)) {
+        const refreshed = await refreshAuthToken();
+        token = refreshed || token;
       }
-      
+
+      const doRequest = async (bearer?: string) => fetch(url, {
+        ...fetchOptions,
+        headers: {
+          ...fetchOptions.headers,
+          ...(bearer && { Authorization: `Bearer ${bearer}` }),
+        },
+        signal: controller.signal
+      });
+
+      let res = await doRequest(token || undefined);
+
+      // Jika unauthorized, coba refresh token lalu ulangi sekali
+      if (res.status === 401) {
+        const refreshed = await refreshAuthToken();
+        if (refreshed) {
+          res = await doRequest(refreshed);
+        }
+      }
+
+      if (!res.ok) {
+        // Coba baca pesan error dari body
+        const contentType = res.headers.get('content-type') || '';
+        let errMsg = `HTTP ${res.status}: ${res.statusText}`;
+        try {
+          if (contentType.includes('application/json')) {
+            const body = await res.json();
+            errMsg = body?.message || body?.error || errMsg;
+          } else {
+            const text = await res.text();
+            if (text) errMsg = text;
+          }
+        } catch {}
+        throw new Error(errMsg);
+      }
+
       const json = (await res.json()) as T;
 
       // Hanya update jika ini adalah fetch terbaru dan component masih mounted

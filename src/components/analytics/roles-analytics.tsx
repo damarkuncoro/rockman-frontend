@@ -74,7 +74,7 @@ export function RolesAnalytics() {
         setLoading(true)
         
         // Fetch roles data dari API
-        const response = await fetch('http://localhost:9999/api/v1/roles')
+        const response = await fetch('/api/v2/roles')
         const roles = await response.json()
         
         // Simulasi data analytics berdasarkan data roles

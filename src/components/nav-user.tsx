@@ -13,6 +13,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/shadcn/ui/avatar"
+import { useRouter } from "next/navigation"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +40,53 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+
+  async function handleLogout() {
+    try {
+      const res = await fetch("/api/v2/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      // Hapus seluruh data localStorage
+      try {
+        localStorage.clear()
+      } catch (e) {
+        // noop jika localStorage tidak tersedia
+      }
+
+      // Hapus semua cookies non-HttpOnly di sisi client
+      try {
+        const raw = typeof document !== 'undefined' ? document.cookie : ''
+        const parts = raw ? raw.split(';') : []
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : undefined
+        parts.forEach((part) => {
+          const eqPos = part.indexOf('=')
+          const name = (eqPos > -1 ? part.slice(0, eqPos) : part).trim()
+          if (!name) return
+          // Fallback umum
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+          // Coba dengan domain eksplisit (termasuk varian dot-domain)
+          if (hostname) {
+            const variants = [hostname, `.${hostname}`]
+            variants.forEach((domain) => {
+              document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain}`
+            })
+          }
+        })
+      } catch (e) {
+        // noop jika document.cookie tidak dapat diakses
+      }
+
+      // Abaikan body respons, cukup arahkan ke halaman login
+      router.replace("/login")
+    } catch (error) {
+      console.error("Gagal logout:", error)
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -84,9 +132,9 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/accounts")}>
                 <IconUserCircle />
-                Account
+                Accounts
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <IconCreditCard />
@@ -98,7 +146,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <IconLogout />
               Log out
             </DropdownMenuItem>

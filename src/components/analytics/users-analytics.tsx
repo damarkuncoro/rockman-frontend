@@ -67,7 +67,7 @@ export function UsersAnalytics() {
         setLoading(true)
         
         // Fetch users data dari API
-        const response = await fetch('http://localhost:9999/api/v1/users')
+        const response = await fetch('/api/v2/users')
         const users = await response.json()
         
         // Simulasi data analytics berdasarkan data users
