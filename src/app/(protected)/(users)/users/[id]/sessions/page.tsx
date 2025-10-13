@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useParams } from "next/navigation"
 import { IconActivity, IconClock, IconDeviceDesktop, IconUser } from "@tabler/icons-react"
 
@@ -24,6 +24,7 @@ import {
 } from "@/components/shadcn/ui/table"
 import { SkeletonCards } from "@/components/skeleton-cards"
 import { SkeletonDataTable } from "@/components/skeleton-data-table"
+import { useFetch } from "@/lib/useFetch"
 
 /**
  * Interface untuk data session
@@ -58,41 +59,16 @@ export default function UserSessionsPage() {
   const params = useParams()
   const userId = params.id as string
   
-  const [isLoading, setIsLoading] = useState(true)
-  const [sessions, setSessions] = useState<SessionData[]>([])
-  const [error, setError] = useState<string | null>(null)
-
-  // Fetch sessions data dari API
-  useEffect(() => {
-    const fetchSessions = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-        
-        const response = await fetch(`http://localhost:9999/api/v1/users/${userId}/sessions`)
-        const data: SessionsResponse = await response.json()
-        
-        if (!response.ok) {
-          throw new Error(data.success === false ? 'Failed to fetch sessions' : 'Network error')
-        }
-        
-        if (data.success) {
-          setSessions(data.data || [])
-        } else {
-          throw new Error('Failed to fetch sessions')
-        }
-      } catch (err) {
-        console.error('Error fetching sessions:', err)
-        setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil data sessions')
-      } finally {
-        setIsLoading(false)
-      }
+  // Fetch sessions via helper (auth-aware, cache-aware)
+  const { data, loading, error } = useFetch<SessionsResponse>(
+    `/api/v2/users/${userId}/sessions`,
+    {
+      immediate: Boolean(userId),
+      useCache: true,
+      cacheMaxAge: 300000,
     }
-
-    if (userId) {
-      fetchSessions()
-    }
-  }, [userId])
+  )
+  const sessions: SessionData[] = data?.data || []
 
   /**
    * Fungsi untuk memformat tanggal
@@ -235,7 +211,7 @@ export default function UserSessionsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-center py-8">
-              <p className="text-red-600 mb-2">Error: {error}</p>
+              <p className="text-red-600 mb-2">Error: {error.message}</p>
               <p className="text-muted-foreground">Gagal memuat data sessions</p>
             </div>
           </CardContent>
@@ -300,7 +276,7 @@ export default function UserSessionsPage() {
   }
 
   // Loading state dengan skeleton yang konsisten dengan dashboard
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="container mx-auto p-8 space-y-8">
         <div className="space-y-2">

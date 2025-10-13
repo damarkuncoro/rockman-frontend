@@ -4,25 +4,18 @@ import { useSWRConfig } from 'swr';
 import { Department } from '../types';
 import { useMutation } from '@/lib/useMutation';
 import { useFetch } from '@/lib/useFetch';
+import { cache } from '@/lib/cache';
+import { buildAuthHeaders } from '@/hooks/common/authHeaders';
 
 /**
  * Fungsi untuk membersihkan cache localStorage terkait departemen
  * @param id - ID departemen yang akan dibersihkan cachenya
  */
 function clearLocalStorageCache(id: string) {
-  try {
-    const keys = Object.keys(localStorage);
-    keys.forEach(key => {
-      if (key.startsWith('useFetchCache:') && 
-         (key.includes('departments') || 
-          key.includes('departements'))) {
-        localStorage.removeItem(key);
-        console.log('Menghapus cache:', key);
-      }
-    });
-  } catch (error) {
-    console.error('Error clearing localStorage cache:', error);
-  }
+  // Gunakan cache util agar konsisten dengan useFetch
+  cache.clear('/api/v2/departments');
+  cache.clear(`/api/v2/departments/${id}`);
+  cache.clear(`/departements/${id}`);
 }
 
 /**
@@ -57,24 +50,29 @@ function invalidateCache(id: string, mutate: (key: any, data?: any, opts?: any) 
  * @returns Data departemen terbaru
  */
 async function refetchDepartmentData(id: string, mutate: (key: any, data?: any, opts?: any) => Promise<any>): Promise<Department> {
-  try {
-    const response = await fetch(`/api/v2/departments/${id}`);
-    if (!response.ok) {
-      throw new Error('Gagal memuat data departemen terbaru');
+  const response = await fetch(`/api/v2/departments/${id}`, {
+    headers: await buildAuthHeaders({ 'Content-Type': 'application/json' }),
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    let errMsg = 'Gagal memuat data departemen terbaru';
+    if (contentType.includes('application/json')) {
+      try { const body = await response.json(); errMsg = body?.message || errMsg; } catch {}
+    } else {
+      try { const text = await response.text(); if (text) errMsg = text; } catch {}
     }
-    
-    const freshData = await response.json();
-    
-    // Update cache dengan data terbaru
-    mutate(`/api/v2/departments/${id}`, freshData, false);
-    mutate(`/departements/${id}`, freshData, false);
-    
-    console.log('Refetch data departemen berhasil:', id);
-    return freshData;
-  } catch (err) {
-    console.error('Gagal refetch data departemen:', err);
-    throw err;
+    throw new Error(errMsg);
   }
+
+  const freshData = await response.json();
+
+  // Update cache dengan data terbaru (SWR kompatibilitas + cache useFetch)
+  mutate(`/api/v2/departments/${id}`, freshData, false);
+  mutate(`/departements/${id}`, freshData, false);
+  cache.set(`/api/v2/departments/${id}`, freshData);
+
+  return freshData;
 }
 
 /**
@@ -119,6 +117,8 @@ export function useUpdateDepartment(id: string) {
   return {
     updateDepartment,
     loading: mutation.loading,
+    // Alias untuk kompatibilitas dengan penggunaan lama
+    isLoading: mutation.loading,
     error: mutation.error,
     data: mutation.data,
   };

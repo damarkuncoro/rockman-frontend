@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import { useSWRConfig } from 'swr';
+import { useMutation } from '@/lib/useMutation';
+import { cache } from '@/lib/cache';
 
 /**
  * Hook untuk menghapus department berdasarkan ID
@@ -9,42 +10,34 @@ import { useSWRConfig } from 'swr';
  * @returns Object yang berisi fungsi deleteDepartment dan status loading/error
  */
 export function useDeleteDepartment(id: string) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const { mutate } = useSWRConfig();
+  const { mutate: swrMutate } = useSWRConfig();
+
+  // Gunakan useMutation untuk konsistensi auth dan error handling
+  const { mutate, loading, error, data } = useMutation<{ message: string }, unknown>(
+    `/api/v2/departments/${id}`,
+    'DELETE'
+  );
 
   /**
    * Menghapus department berdasarkan ID
    * @returns Promise yang menyelesaikan ketika department berhasil dihapus
    */
   const deleteDepartment = async (): Promise<void> => {
-    setIsLoading(true);
-    setError(null);
+    await mutate(undefined as unknown);
 
-    try {
-      const response = await fetch(`/api/v2/departments/${id}`, {
-        method: 'DELETE',
-      });
+    // Invalidate cache untuk memperbarui data pada consumer berbasis useFetch
+    cache.clear('/api/v2/departments');
+    cache.clear(`/api/v2/departments/${id}`);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Gagal menghapus department');
-      }
-
-      // Invalidate cache untuk memperbarui data
-      mutate('/api/v2/departments');
-      
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Terjadi kesalahan saat menghapus department'));
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
+    // Back-compat: invalidate SWR key jika ada consumer lama
+    swrMutate('/api/v2/departments');
+    swrMutate(`/api/v2/departments/${id}`);
   };
 
   return {
     deleteDepartment,
-    isLoading,
+    isLoading: loading,
     error,
+    response: data,
   };
 }

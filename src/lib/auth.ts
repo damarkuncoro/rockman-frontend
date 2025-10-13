@@ -1,9 +1,12 @@
 "use client";
 
+// Gunakan kunci token dari env agar konsisten di seluruh app
+const TOKEN_KEY = (process.env.NEXT_PUBLIC_LOCAL_STORAGE_TOKEN_KEY || "auth_token").trim();
+
 /** Mendapatkan token dari localStorage */
 export function getAuthToken(): string | null {
   try {
-    return localStorage.getItem("auth_token");
+    return localStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
@@ -12,14 +15,14 @@ export function getAuthToken(): string | null {
 /** Menyimpan token ke localStorage */
 export function setAuthToken(token: string) {
   try {
-    localStorage.setItem("auth_token", token);
+    localStorage.setItem(TOKEN_KEY, token);
   } catch {}
 }
 
 /** Menghapus token dari localStorage */
 export function clearAuthToken() {
   try {
-    localStorage.removeItem("auth_token");
+    localStorage.removeItem(TOKEN_KEY);
   } catch {}
 }
 
@@ -47,7 +50,7 @@ export function isTokenExpired(token: string): boolean {
 /** Merefresh token menggunakan endpoint publik token-refresh */
 export async function refreshAuthToken(): Promise<string | null> {
   try {
-    const res = await fetch("/api/v2/auth/token-refresh", {
+    const res = await fetch("/api/v2/auth/refresh-token", {
       method: "POST",
       credentials: "include",
       headers: {

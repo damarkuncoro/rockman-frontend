@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useFetch } from "@/lib/useFetch"
 import { useParams, useRouter } from "next/navigation"
 import { 
   IconActivity, 
@@ -102,11 +103,19 @@ export default function UserAccessLogsPage() {
   const userId = params.id as string
   
   // State management
-  const [isLoading, setIsLoading] = useState(true)
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([])
   const [filteredLogs, setFilteredLogs] = useState<AccessLog[]>([])
   const [stats, setStats] = useState<AccessLogStats | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  
+  // Fetch access logs via API v2 helper
+  const { data, error, loading, refetch } = useFetch<{ message?: string; data: AccessLog[] } | AccessLog[]>(
+    userId ? `/api/v2/users/${userId}/access-logs` : `/api/v2/access-logs`,
+    {
+      immediate: Boolean(userId),
+      useCache: true,
+      cacheMaxAge: 300000,
+    }
+  )
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
@@ -114,37 +123,13 @@ export default function UserAccessLogsPage() {
   const [methodFilter, setMethodFilter] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<string>("all")
 
-  /**
-   * Fungsi untuk mengambil data access logs dari API
-   */
-  const fetchAccessLogs = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      
-      const response = await fetch(`http://localhost:9999/api/v1/access_logs`)
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      
-      // Filter logs berdasarkan userId
-      const userLogs = data.filter((log: AccessLog) => 
-        log.userId === parseInt(userId)
-      )
-      
-      setAccessLogs(userLogs)
-      setFilteredLogs(userLogs)
-      calculateStats(userLogs)
-    } catch (err) {
-      console.error('Error fetching access logs:', err)
-      setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil data access logs')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // Sinkronisasi data ketika fetch selesai
+  useEffect(() => {
+    const raw = Array.isArray(data) ? data : (data?.data ?? [])
+    setAccessLogs(raw)
+    setFilteredLogs(raw)
+    calculateStats(raw)
+  }, [data, userId])
 
   /**
    * Fungsi untuk menghitung statistik access logs
@@ -307,10 +292,9 @@ export default function UserAccessLogsPage() {
   }
 
   // Effects
+  // Trigger initial fetch handled by useFetch via `immediate`
   useEffect(() => {
-    if (userId) {
-      fetchAccessLogs()
-    }
+    // No-op: kept for consistency if we need side-effects on userId change
   }, [userId])
 
   useEffect(() => {
@@ -318,7 +302,7 @@ export default function UserAccessLogsPage() {
   }, [searchTerm, decisionFilter, methodFilter, dateFilter, accessLogs])
 
   // Loading state
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="container mx-auto p-4 lg:p-6 space-y-6">
         {/* Header Skeleton */}
@@ -357,8 +341,8 @@ export default function UserAccessLogsPage() {
           <CardContent className="p-6">
             <div className="text-center space-y-4">
               <div className="text-red-500 text-lg font-semibold">Error Loading Access Logs</div>
-              <p className="text-muted-foreground">{error}</p>
-              <Button onClick={fetchAccessLogs}>
+              <p className="text-muted-foreground">{error.message || String(error)}</p>
+              <Button onClick={refetch}>
                 <IconRefresh className="w-4 h-4 mr-2" />
                 Coba Lagi
               </Button>
@@ -539,7 +523,7 @@ export default function UserAccessLogsPage() {
                 Menampilkan {filteredLogs.length} dari {accessLogs.length} log akses
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={fetchAccessLogs}>
+            <Button variant="outline" size="sm" onClick={refetch}>
               <IconRefresh className="w-4 h-4 mr-2" />
               Refresh
             </Button>

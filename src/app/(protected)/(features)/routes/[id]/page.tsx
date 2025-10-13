@@ -16,6 +16,7 @@ import {
 } from "@/components/shadcn/ui/card"
 import { SkeletonCards } from "@/components/skeleton-cards"
 import Link from "next/link"
+import { useFetch } from "@/lib/useFetch"
 
 /**
  * Interface untuk data route feature
@@ -36,6 +37,80 @@ interface Feature {
   description: string
   category: string
   createdAt: string
+}
+
+function AssociatedFeatureSection({ featureId }: { featureId: number }) {
+  const { data: feature, loading, error, refetch } = useFetch<Feature>(`/api/v2/features/${featureId}`, { useCache: true })
+
+  if (loading) {
+    return (
+      <div className="px-4 lg:px-6">
+        <SkeletonCards />
+      </div>
+    )
+  }
+
+  if (error || !feature) {
+    return (
+      <div className="px-4 lg:px-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Associated Feature</CardTitle>
+            <CardDescription>Failed to load feature details</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <p className="text-muted-foreground">{error?.message || "Feature not found"}</p>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 lg:px-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center space-x-2">
+                <IconShield className="h-5 w-5" />
+                <span>Associated Feature</span>
+              </CardTitle>
+              <CardDescription>
+                Feature yang terkait dengan route ini
+              </CardDescription>
+            </div>
+            <Link href={`/features/${feature.id}`}>
+              <Button variant="outline" size="sm">
+                View Feature
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Feature Name</label>
+              <p className="text-lg font-semibold">{feature.name}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Description</label>
+              <p className="text-sm text-muted-foreground">{feature.description}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Category</label>
+              <Badge variant="outline" className="ml-2">
+                {feature.category}
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
 
 /**
@@ -81,7 +156,7 @@ export default function RouteDetailPage() {
       setError(null)
 
       // Fetch route data
-      const routeResponse = await fetch(`http://localhost:9999/api/v1/route_features/${routeId}`)
+      const routeResponse = await fetch(`/api/v2/route-features/${routeId}`)
       if (!routeResponse.ok) {
         throw new Error('Failed to fetch route data')
       }
@@ -90,7 +165,7 @@ export default function RouteDetailPage() {
 
       // Fetch feature data jika route berhasil diambil
       if (routeData.featureId) {
-        const featureResponse = await fetch(`http://localhost:9999/api/v1/features/${routeData.featureId}`)
+        const featureResponse = await fetch(`/api/v2/features/${routeData.featureId}`)
         if (featureResponse.ok) {
           const featureData = await featureResponse.json()
           setFeature(featureData)
@@ -194,47 +269,8 @@ export default function RouteDetailPage() {
       </div>
 
       {/* Associated Feature */}
-      {feature && (
-        <div className="px-4 lg:px-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center space-x-2">
-                    <IconShield className="h-5 w-5" />
-                    <span>Associated Feature</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Feature yang terkait dengan route ini
-                  </CardDescription>
-                </div>
-                <Link href={`/features/${feature.id}`}>
-                  <Button variant="outline" size="sm">
-                    View Feature
-                  </Button>
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Feature Name</label>
-                  <p className="text-lg font-semibold">{feature.name}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Description</label>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Category</label>
-                  <Badge variant="outline" className="ml-2">
-                    {feature.category}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {route.featureId && (
+        <AssociatedFeatureSection featureId={route.featureId} />
       )}
 
       {/* Route Statistics */}

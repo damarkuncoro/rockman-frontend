@@ -64,10 +64,10 @@ import {
 
 // Interface untuk data role
 interface Role {
-  id: number
+  id: string
   name: string
-  grantsAll: boolean
-  createdAt: string
+  grantsAll?: boolean | null
+  createdAt?: string
 }
 
 // Interface untuk form data
@@ -113,7 +113,7 @@ export default function RoleManagementPage() {
       setIsLoading(true)
       setError(null)
       
-      const response = await fetch('http://localhost:9999/api/v1/roles', {
+      const response = await fetch('/api/v2/roles', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -125,9 +125,10 @@ export default function RoleManagementPage() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const data = await response.json()
-      console.log('API Response:', data) // Debug log
-      setRoles(data || []) // Ubah dari data.data ke data langsung
+      const json = await response.json()
+      console.log('API Response:', json) // Debug log
+      const list = Array.isArray(json) ? json : json?.data ?? []
+      setRoles(list || [])
     } catch (err) {
       console.error('Error fetching roles:', err)
       setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengambil data')
@@ -145,7 +146,7 @@ export default function RoleManagementPage() {
     try {
       setIsSubmitting(true)
       
-      const response = await fetch('http://localhost:9999/api/v1/roles', {
+      const response = await fetch('/api/v2/roles', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,7 +178,7 @@ export default function RoleManagementPage() {
     try {
       setIsSubmitting(true)
       
-      const response = await fetch(`http://localhost:9999/api/v1/roles/${selectedRole.id}`, {
+      const response = await fetch(`/api/v2/roles/${selectedRole.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -210,7 +211,7 @@ export default function RoleManagementPage() {
     try {
       setIsSubmitting(true)
       
-      const response = await fetch(`http://localhost:9999/api/v1/roles/${selectedRole.id}`, {
+      const response = await fetch(`/api/v2/roles/${selectedRole.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +250,7 @@ export default function RoleManagementPage() {
     setSelectedRole(role)
     setFormData({
       name: role.name,
-      grantsAll: role.grantsAll,
+      grantsAll: !!role.grantsAll,
     })
     setIsEditDialogOpen(true)
   }
@@ -258,8 +259,7 @@ export default function RoleManagementPage() {
    * Handler untuk view role
    */
   const handleViewRole = (role: Role) => {
-    setSelectedRole(role)
-    setIsViewDialogOpen(true)
+    router.push(`/roles/${role.id}`)
   }
 
   /**
@@ -320,8 +320,11 @@ export default function RoleManagementPage() {
   /**
    * Fungsi untuk format tanggal
    */
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('id-ID', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -686,7 +689,11 @@ export default function RoleManagementPage() {
                 </TableRow>
               ) : (
                 paginatedRoles.map((role) => (
-                  <TableRow key={role.id}>
+                  <TableRow
+                    key={role.id}
+                    className="cursor-pointer hover:bg-muted/40"
+                    onClick={() => router.push(`/roles/${role.id}`)}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
@@ -722,13 +729,22 @@ export default function RoleManagementPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
+                          <Button
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <span className="sr-only">Open menu</span>
                             <IconChevronDown className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleViewRole(role)}>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              router.push(`/roles/${role.id}`)
+                            }}
+                          >
                             <IconEye className="mr-2 h-4 w-4" />
                             Lihat Detail
                           </DropdownMenuItem>

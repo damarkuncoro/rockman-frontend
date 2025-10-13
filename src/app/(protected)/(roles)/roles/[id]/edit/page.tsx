@@ -42,11 +42,11 @@ import {
  * Interface untuk data role
  */
 interface Role {
-  id: number
+  id: string
   name: string
-  grantsAll: boolean
-  createdAt: string
-  updatedAt?: string
+  grantsAll?: boolean | null
+  createdAt?: string
+  updatedAt?: string | null
 }
 
 /**
@@ -93,11 +93,12 @@ export default function EditRolePage() {
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`http://localhost:9999/api/v1/roles/${roleId}`, {
+      const response = await fetch(`/api/v2/roles/${roleId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -107,13 +108,14 @@ export default function EditRolePage() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const roleData = await response.json()
+      const json = await response.json()
+      const roleData: Role = (json?.data ?? json) as Role
       setRole(roleData)
       
       // Set form data dengan data yang diambil
       const formValues = {
         name: roleData.name,
-        grantsAll: roleData.grantsAll
+        grantsAll: !!roleData.grantsAll
       }
       setFormData(formValues)
       setOriginalData(formValues)
@@ -134,7 +136,7 @@ export default function EditRolePage() {
       setSaving(true)
       setError(null)
       
-      const response = await fetch(`http://localhost:9999/api/v1/roles/${roleId}`, {
+      const response = await fetch(`/api/v2/roles/${roleId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -146,7 +148,8 @@ export default function EditRolePage() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const updatedRole = await response.json()
+      const updatedJson = await response.json()
+      const updatedRole: Role = (updatedJson?.data ?? updatedJson) as Role
       setRole(updatedRole)
       setOriginalData(formData)
       setHasChanges(false)
@@ -207,8 +210,11 @@ export default function EditRolePage() {
   /**
    * Format tanggal untuk tampilan
    */
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('id-ID', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

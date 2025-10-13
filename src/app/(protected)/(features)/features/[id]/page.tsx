@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useFetch } from "@/lib/useFetch"
 import { useParams } from "next/navigation"
 import { IconRoute, IconShield, IconTrendingUp, IconArrowLeft, IconEye } from "@tabler/icons-react"
 import { Badge } from "@/components/shadcn/ui/badge"
@@ -60,66 +60,41 @@ export default function FeatureDetailPage() {
   const params = useParams()
   const featureId = params.id as string
   
-  const [feature, setFeature] = useState<Feature | null>(null)
-  const [routes, setRoutes] = useState<RouteFeature[]>([])
-  const [policies, setPolicies] = useState<Policy[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Fetch single feature by id using API v2
+  const { data: featureData, loading: featureLoading, error: featureError, refetch: refetchFeature } = useFetch<Feature | { data: Feature }>(
+    `/api/v2/features/${featureId}`,
+    { immediate: Boolean(featureId), useCache: true, cacheMaxAge: 300000 }
+  )
 
-  /**
-   * Mengambil data feature dan routes dari API
-   */
-  const fetchData = async () => {
-    try {
-      setIsLoading(true)
-      
-      // Fetch features
-      const featuresResponse = await fetch('http://localhost:9999/api/v1/features')
-      if (!featuresResponse.ok) {
-        throw new Error(`HTTP error! status: ${featuresResponse.status}`)
-      }
-      const featuresData = await featuresResponse.json()
-      
-      // Find the specific feature
-      const currentFeature = featuresData.find((f: Feature) => f.id === parseInt(featureId))
-      setFeature(currentFeature || null)
-      
-      // Fetch routes
-      const routesResponse = await fetch('http://localhost:9999/api/v1/route_features')
-      if (!routesResponse.ok) {
-        throw new Error(`HTTP error! status: ${routesResponse.status}`)
-      }
-      const routesData = await routesResponse.json()
-      
-      // Filter routes by featureId
-      const filteredRoutes = routesData.filter((route: RouteFeature) => 
-        route.featureId === parseInt(featureId)
-      )
-      setRoutes(filteredRoutes)
-      
-      // Fetch policies
-      const policiesResponse = await fetch('http://localhost:9999/api/v1/policies')
-      if (!policiesResponse.ok) {
-        throw new Error(`HTTP error! status: ${policiesResponse.status}`)
-      }
-      const policiesData = await policiesResponse.json()
-      
-      // Filter policies by featureId
-      const filteredPolicies = policiesData.filter((policy: Policy) => 
-        policy.featureId === parseInt(featureId)
-      )
-      setPolicies(filteredPolicies)
-      
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch data')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // Fetch routes filtered by featureId (via query param)
+  const { data: routeData, loading: routesLoading, error: routesError, refetch: refetchRoutes } = useFetch<RouteFeature[] | { data: RouteFeature[] }>(
+    `/api/v2/route-features?featureId=${featureId}`,
+    { immediate: Boolean(featureId), useCache: true, cacheMaxAge: 300000 }
+  )
 
-  useEffect(() => {
-    fetchData()
-  }, [featureId])
+  // Fetch policies filtered by featureId (via query param)
+  const { data: policiesData, loading: policiesLoading, error: policiesError, refetch: refetchPolicies } = useFetch<Policy[] | { data: Policy[] }>(
+    `/api/v2/policies?featureId=${featureId}`,
+    { immediate: Boolean(featureId), useCache: true, cacheMaxAge: 300000 }
+  )
+
+  const feature: Feature | null = (() => {
+    const raw = featureData as any
+    const obj = Array.isArray(raw) ? raw[0] : (raw?.data ?? raw)
+    return obj || null
+  })()
+
+  const routes: RouteFeature[] = (() => {
+    const raw = routeData as any
+    const arr = Array.isArray(raw) ? raw : (raw?.data ?? [])
+    return arr || []
+  })()
+
+  const policies: Policy[] = (() => {
+    const raw = policiesData as any
+    const arr = Array.isArray(raw) ? raw : (raw?.data ?? [])
+    return arr || []
+  })()
 
   /**
    * Menghitung statistik routes
@@ -180,7 +155,7 @@ export default function FeatureDetailPage() {
     }
   }
 
-  if (isLoading) {
+  if (featureLoading || routesLoading || policiesLoading) {
     return (
       <div className="container mx-auto p-8 space-y-8">
         <div className="space-y-2">
@@ -197,13 +172,14 @@ export default function FeatureDetailPage() {
     )
   }
 
-  if (error) {
+  if (featureError || routesError || policiesError) {
+    const errMsg = featureError?.message || routesError?.message || policiesError?.message || 'Failed to fetch data'
     return (
       <div className="container mx-auto p-8">
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-bold text-destructive">Error</h1>
-          <p className="text-muted-foreground">{error}</p>
-          <Button onClick={fetchData}>Try Again</Button>
+          <p className="text-muted-foreground">{errMsg}</p>
+          <Button onClick={() => { refetchFeature(); refetchRoutes(); refetchPolicies(); }}>Try Again</Button>
         </div>
       </div>
     )
@@ -282,7 +258,7 @@ export default function FeatureDetailPage() {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Created At</p>
-                <p className="text-lg">{new Date(feature.createdAt).toLocaleDateString()}</p>
+                <p className="text-lg">{(() => { const d = new Date(feature.createdAt); return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('id-ID'); })()}</p>
               </div>
             </div>
             <div className="mt-6">

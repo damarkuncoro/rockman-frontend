@@ -122,6 +122,7 @@ export const useUserManagement = (): UserManagementHook => {
   // Hooks API
   const { data, loading: isUsersLoading, error: usersError } = useAllUsers();
   const { data: deptData, loading: isDeptLoading, error: deptError } = useAllDepartments();
+  const { deleteUser: apiDeleteUser } = useDeleteUser();
 
   
   /**
@@ -183,7 +184,6 @@ export const useUserManagement = (): UserManagementHook => {
    */
   const deleteUser = async (userId: string): Promise<void> => {
     try {
-      const { deleteUser: apiDeleteUser } = useDeleteUser();
       await apiDeleteUser(userId);
       await fetchUsers();
       return Promise.resolve();

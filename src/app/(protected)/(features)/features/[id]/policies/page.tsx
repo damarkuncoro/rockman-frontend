@@ -64,12 +64,17 @@ export default function FeaturePoliciesPage() {
     try {
       setIsLoading(true)
       
-      // Fetch policies
-      const policiesResponse = await fetch('http://localhost:9999/api/v1/policies')
+      // Fetch policies via API v2
+      const policiesResponse = await fetch('/api/v2/policies', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
       if (!policiesResponse.ok) {
         throw new Error(`HTTP error! status: ${policiesResponse.status}`)
       }
-      const policiesData = await policiesResponse.json()
+      const policiesJson = await policiesResponse.json()
+      const policiesData = Array.isArray(policiesJson) ? policiesJson : (policiesJson?.data ?? [])
       
       // Filter policies by featureId
       const filteredPolicies = policiesData.filter((policy: Policy) => 
@@ -77,16 +82,18 @@ export default function FeaturePoliciesPage() {
       )
       setPolicies(filteredPolicies)
       
-      // Fetch features to get feature details
-      const featuresResponse = await fetch('http://localhost:9999/api/v1/features')
+      // Fetch single feature detail via API v2
+      const featuresResponse = await fetch(`/api/v2/features/${featureId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
       if (!featuresResponse.ok) {
         throw new Error(`HTTP error! status: ${featuresResponse.status}`)
       }
-      const featuresData = await featuresResponse.json()
-      
-      // Find the specific feature
-      const currentFeature = featuresData.find((f: Feature) => f.id === parseInt(featureId))
-      setFeature(currentFeature || null)
+      const featureJson = await featuresResponse.json()
+      const featureData = Array.isArray(featureJson) ? featureJson[0] : (featureJson?.data ?? featureJson)
+      setFeature(featureData || null)
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')

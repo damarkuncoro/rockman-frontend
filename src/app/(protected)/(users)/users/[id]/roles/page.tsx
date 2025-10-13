@@ -13,23 +13,22 @@ import { Skeleton } from "@/components/shadcn/ui/skeleton"
  * Interface untuk data role pengguna
  */
 interface UserRole {
-  id: number
+  id: string
   name: string
   grantsAll: boolean
-  createdAt: string
+  createdAt?: string
 }
 
 /**
  * Interface untuk respons API user roles
  */
-interface UserRolesResponse {
-  success: boolean
-  data: {
-    userId: number
-    roles: UserRole[]
-    totalRoles: number
-  }
-  message?: string
+// Bentuk respons API v2 bisa berupa array langsung atau objek dengan data
+type APIUserRole = {
+  id: string
+  userId: string
+  roleId: string
+  isPrimary?: boolean
+  role?: { id: string; name: string; grantsAll?: boolean; createdAt?: string }
 }
 
 /**
@@ -139,25 +138,29 @@ export default function UserRolesPage() {
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`http://localhost:9999/api/v1/users/${userId}/roles`)
+      const response = await fetch(`/api/v2/users/${userId}/roles`)
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const data: UserRolesResponse = await response.json()
-      
-      if (data.success) {
-        setRoles(data.data.roles)
-        // Set dummy user data for display
-        setUser({
-          id: parseInt(userId),
-          name: `User ${userId}`,
-          email: `user${userId}@example.com`
-        })
-      } else {
-        throw new Error(data.message || 'Failed to fetch user roles')
-      }
+      const raw = await response.json()
+      const items: APIUserRole[] = Array.isArray(raw) ? raw : (raw?.data ?? [])
+
+      const mapped: UserRole[] = items.map((ur) => ({
+        id: ur.role?.id ?? ur.roleId,
+        name: ur.role?.name ?? ur.roleId,
+        grantsAll: Boolean(ur.role?.grantsAll),
+        createdAt: ur.role?.createdAt,
+      }))
+
+      setRoles(mapped)
+      // Set info user sederhana
+      setUser({
+        id: Number.isNaN(Number(userId)) ? 0 : Number(userId),
+        name: `User ${userId}`,
+        email: `user${userId}@example.com`
+      })
     } catch (err) {
       console.error('Error fetching user roles:', err)
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -340,10 +343,9 @@ export default function UserRolesPage() {
               <span className="font-medium">Most recent assignment</span>
             </div>
             <p className="text-muted-foreground text-sm">
-              {stats.latestRole 
+              {stats.latestRole?.createdAt
                 ? `Added on ${new Date(stats.latestRole.createdAt).toLocaleDateString()}`
-                : 'No roles assigned yet'
-              }
+                : 'No roles assigned yet'}
             </p>
           </CardContent>
         </Card>
@@ -401,9 +403,11 @@ export default function UserRolesPage() {
                   </div>
                   <div>
                     <h3 className="font-medium">{role.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Added on {new Date(role.createdAt).toLocaleDateString()}
-                    </p>
+                    {role.createdAt && (
+                      <p className="text-sm text-muted-foreground">
+                        Added on {new Date(role.createdAt).toLocaleDateString()}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

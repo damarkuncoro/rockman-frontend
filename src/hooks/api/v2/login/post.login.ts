@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation } from "@/lib/useMutation";
+import { setAuthToken, getAuthToken } from "@/lib/auth";
 
 /**
  * Interface untuk data department
@@ -87,17 +88,13 @@ export function useLogin() {
       // Periksa struktur respons yang benar
       if (result?.data?.token) {
         console.log("Login successful, token received:", result.data.token);
-        localStorage.setItem("auth_token", result.data.token);
-      } else if (result?.data.token) {
-        // Alternatif struktur respons
-        console.log("Login successful, token received (alt format):", result.data.token);
-        localStorage.setItem("auth_token", result.data.token);
+        setAuthToken(result.data.token);
       } else {
         console.warn("Token tidak ditemukan dalam respons:", result);
       }
       
       // Verifikasi token tersimpan
-      const savedToken = localStorage.getItem("auth_token");
+      const savedToken = getAuthToken();
       console.log("Token tersimpan di localStorage:", savedToken ? "Ya" : "Tidak");
       
       return result;

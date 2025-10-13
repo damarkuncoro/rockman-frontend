@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { Department } from '../types';
+import { buildAuthHeaders } from '@/hooks/common/authHeaders';
 
 
 /**
@@ -25,7 +26,9 @@ export const useDepartmentDetail = (departmentId?: string) => {
     setError(null);
     
     try {
-      const response = await fetch(`/api/v2/departments/${targetId}`);
+      const response = await fetch(`/api/v2/departments/${targetId}`, {
+        headers: await buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      });
       
       if (!response.ok) {
         throw new Error(`Error fetching department: ${response.statusText}`);

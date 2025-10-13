@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useMutation } from '@/lib/useMutation';
 
 /**
  * Interface untuk data pengguna baru
@@ -18,39 +19,23 @@ interface CreateUserData {
  * @returns Object dengan fungsi createUser, loading state, dan error
  */
 export const useCreateUser = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const mutation = useMutation<any, CreateUserData>(
+    '/api/v2/users',
+    'POST'
+  );
 
   const createUser = useCallback(async (userData: CreateUserData) => {
-    setLoading(true);
-    setError(null);
-    
     try {
-      const response = await fetch('/api/v2/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error creating user: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      return data;
+      const result = await mutation.mutate(userData);
+      return result || null;
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Unknown error occurred'));
       return null;
-    } finally {
-      setLoading(false);
     }
   }, []);
 
   return {
     createUser,
-    loading,
-    error,
+    loading: mutation.loading,
+    error: mutation.error,
   };
 };

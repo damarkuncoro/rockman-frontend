@@ -99,12 +99,19 @@ export default function FeatureCategoryDetailPage() {
    */
   const fetchCategory = async () => {
     try {
-      const response = await fetch(`http://localhost:9999/api/v1/feature-categories/${categoryId}`)
+      const response = await fetch(`/api/v2/feature-categories/${categoryId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
       if (!response.ok) {
         throw new Error('Failed to fetch category')
       }
-      const data = await response.json()
-      setCategory(data)
+      const json = await response.json()
+      const data = Array.isArray(json) ? json[0] : (json?.data ?? json)
+      setCategory(data as FeatureCategory)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     }
@@ -115,13 +122,20 @@ export default function FeatureCategoryDetailPage() {
    */
   const fetchFeatures = async () => {
     try {
-      const response = await fetch(`http://localhost:9999/api/v1/features`)
+      const response = await fetch(`/api/v2/features`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
       if (!response.ok) {
         throw new Error('Failed to fetch features')
       }
-      const data = await response.json()
+      const json = await response.json()
+      const data = Array.isArray(json) ? json : (json?.data ?? [])
       // Filter features berdasarkan category slug
-      const categoryFeatures = data.filter((feature: Feature) => 
+      const categoryFeatures = (Array.isArray(data) ? data : []).filter((feature: Feature) => 
         feature.categorySlug === category?.slug
       )
       setFeatures(categoryFeatures)
@@ -155,8 +169,12 @@ export default function FeatureCategoryDetailPage() {
     if (!confirm('Apakah Anda yakin ingin menghapus category ini?')) return
 
     try {
-      const response = await fetch(`http://localhost:9999/api/v1/feature-categories/${categoryId}`, {
+      const response = await fetch(`/api/v2/feature-categories/${categoryId}`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
       })
       
       if (!response.ok) {
@@ -176,11 +194,12 @@ export default function FeatureCategoryDetailPage() {
     if (!category) return
 
     try {
-      const response = await fetch(`http://localhost:9999/api/v1/feature-categories/${categoryId}`, {
+      const response = await fetch(`/api/v2/feature-categories/${categoryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           ...category,
           isActive: !category.isActive,
@@ -191,8 +210,9 @@ export default function FeatureCategoryDetailPage() {
         throw new Error('Failed to update category')
       }
 
-      const updatedCategory = await response.json()
-      setCategory(updatedCategory)
+      const json = await response.json()
+      const updatedCategory = Array.isArray(json) ? json[0] : (json?.data ?? json)
+      setCategory(updatedCategory as FeatureCategory)
     } catch (err) {
       alert('Gagal mengupdate category: ' + (err instanceof Error ? err.message : 'Unknown error'))
     }
@@ -202,7 +222,10 @@ export default function FeatureCategoryDetailPage() {
    * Fungsi untuk format tanggal
    */
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
+    if (!dateString) return '-'
+    const d = new Date(dateString)
+    if (isNaN(d.getTime())) return '-'
+    return d.toLocaleDateString('id-ID', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -253,9 +276,9 @@ export default function FeatureCategoryDetailPage() {
                 {error || 'Category tidak ditemukan'}
               </p>
               <Button asChild>
-                <Link href="/categories">
+                <Link href="/feature-categories">
                   <IconArrowLeft className="mr-2 h-4 w-4" />
-                  Kembali ke Categories
+                  Kembali ke Feature Categories
                 </Link>
               </Button>
             </div>

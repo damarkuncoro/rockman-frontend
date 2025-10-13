@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useFetch } from "@/lib/useFetch"
 import { useRouter } from "next/navigation"
 import { IconPlus, IconSettings, IconShield, IconTrendingUp } from "@tabler/icons-react"
 import { Badge } from "@/components/shadcn/ui/badge"
@@ -39,31 +39,14 @@ interface Feature {
  * Implementasi skeleton loading untuk UX yang lebih baik
  */
 export default function FeatureManagementPage() {
-  const [features, setFeatures] = useState<Feature[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { data, loading, error, refetch } = useFetch<Feature[] | { data: Feature[] }>(
+    "/api/v2/features",
+    { immediate: true, useCache: true, cacheMaxAge: 300000 }
+  )
+  const features: Feature[] = (Array.isArray(data) ? data : (data?.data ?? [])) || []
 
-  /**
-   * Mengambil data features dari API
-   */
-  const fetchFeatures = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch('http://localhost:9999/api/v1/features')
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      setFeatures(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch features')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // Data fetching handled by useFetch
 
   /**
    * Handler untuk navigasi ke halaman detail feature
@@ -73,9 +56,7 @@ export default function FeatureManagementPage() {
     router.push(`/features/${featureId}`)
   }
 
-  useEffect(() => {
-    fetchFeatures()
-  }, [])
+  // Initial fetch handled by `immediate: true`
 
   /**
    * Menghitung statistik features
@@ -100,7 +81,7 @@ export default function FeatureManagementPage() {
 
   const stats = getFeatureStats()
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="container mx-auto p-8 space-y-8">
         <div className="space-y-2">
@@ -122,8 +103,8 @@ export default function FeatureManagementPage() {
       <div className="container mx-auto p-8">
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-bold text-destructive">Error</h1>
-          <p className="text-muted-foreground">{error}</p>
-          <Button onClick={fetchFeatures}>Try Again</Button>
+          <p className="text-muted-foreground">{error.message}</p>
+          <Button onClick={refetch}>Try Again</Button>
         </div>
       </div>
     )

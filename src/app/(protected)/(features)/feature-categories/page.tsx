@@ -97,15 +97,20 @@ export default function CategoriesPage() {
       setIsLoading(true)
       setError(null)
       
-      const response = await fetch('http://localhost:9999/api/v1/feature-categories')
+      const response = await fetch('/api/v2/feature-categories', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       
-      const data = await response.json()
-      setCategories(data)
-      setFilteredCategories(data)
+      const json = await response.json()
+      const list = Array.isArray(json) ? json : (json?.data ?? [])
+      setCategories(list || [])
+      setFilteredCategories(list || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch categories')
       console.error('Error fetching categories:', err)
@@ -190,8 +195,10 @@ export default function CategoriesPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:9999/api/v1/feature-categories/${categoryId}`, {
+      const response = await fetch(`/api/v2/feature-categories/${categoryId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       })
 
       if (!response.ok) {

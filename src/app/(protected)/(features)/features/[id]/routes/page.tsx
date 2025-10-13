@@ -62,12 +62,17 @@ export default function FeatureRoutesPage() {
     try {
       setIsLoading(true)
       
-      // Fetch routes
-      const routesResponse = await fetch('http://localhost:9999/api/v1/route_features')
+      // Fetch routes via API v2
+      const routesResponse = await fetch('/api/v2/route-features', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
       if (!routesResponse.ok) {
         throw new Error(`HTTP error! status: ${routesResponse.status}`)
       }
-      const routesData = await routesResponse.json()
+      const routesJson = await routesResponse.json()
+      const routesData = Array.isArray(routesJson) ? routesJson : (routesJson?.data ?? [])
       
       // Filter routes by featureId
       const filteredRoutes = routesData.filter((route: RouteFeature) => 
@@ -75,16 +80,18 @@ export default function FeatureRoutesPage() {
       )
       setRoutes(filteredRoutes)
       
-      // Fetch features to get feature details
-      const featuresResponse = await fetch('http://localhost:9999/api/v1/features')
+      // Fetch single feature detail via API v2
+      const featuresResponse = await fetch(`/api/v2/features/${featureId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
       if (!featuresResponse.ok) {
         throw new Error(`HTTP error! status: ${featuresResponse.status}`)
       }
-      const featuresData = await featuresResponse.json()
-      
-      // Find the specific feature
-      const currentFeature = featuresData.find((f: Feature) => f.id === parseInt(featureId))
-      setFeature(currentFeature || null)
+      const featureJson = await featuresResponse.json()
+      const featureData = Array.isArray(featureJson) ? featureJson[0] : (featureJson?.data ?? featureJson)
+      setFeature(featureData || null)
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
