@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { cache } from '@/lib/cache';
 
 /**
  * Interface untuk data sesi pengguna
@@ -26,23 +27,38 @@ export const useUserSessions = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
+  const CACHE_MAX_AGE = 300000; // 5 menit
+
   /**
    * Fungsi untuk mengambil sesi pengguna dari API
    * @param {string} userId - ID pengguna
    */
   const fetchUserSessions = async (userId: string) => {
     try {
-      setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/v2/users/${userId}/sessions`);
+      const url = `/api/v2/users/${userId}/sessions`;
+
+      // Tampilkan data cache terlebih dahulu jika tersedia agar UI langsung terisi
+      const cached = cache.get<{ message?: string; data: UserSession[] }>(url, CACHE_MAX_AGE);
+      if (cached && Array.isArray(cached.data)) {
+        setSessions(cached.data);
+      }
+
+      setLoading(true);
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error(`Error: ${response.status}`);
       }
 
       const data = await response.json();
-      setSessions(data.data || []);
+      const nextSessions: UserSession[] = Array.isArray(data?.data) ? data.data : [];
+      setSessions(nextSessions);
+
+      // Simpan ke cache agar navigasi berikutnya langsung menampilkan data tanpa reload
+      cache.set(url, { message: data?.message, data: nextSessions });
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Terjadi kesalahan saat mengambil sesi pengguna'));
     } finally {
@@ -59,8 +75,8 @@ export const useUserSessions = () => {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch(`/api/v2/users/${userId}/sessions/${sessionId}`, {
+      const url = `/api/v2/users/${userId}/sessions/${sessionId}`;
+      const response = await fetch(url, {
         method: 'DELETE',
       });
 
@@ -68,7 +84,13 @@ export const useUserSessions = () => {
         throw new Error(`Error: ${response.status}`);
       }
 
-      setSessions(prev => prev.filter(session => session.id !== sessionId));
+      setSessions(prev => {
+        const updated = prev.filter(session => session.id !== sessionId);
+        // Update cache list untuk endpoint list
+        const listUrl = `/api/v2/users/${userId}/sessions`;
+        cache.set(listUrl, { data: updated });
+        return updated;
+      });
       return true;
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Terjadi kesalahan saat mengakhiri sesi'));
@@ -87,8 +109,8 @@ export const useUserSessions = () => {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch(`/api/v2/users/${userId}/sessions/terminate-all`, {
+      const url = `/api/v2/users/${userId}/sessions/terminate-all`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,7 +122,13 @@ export const useUserSessions = () => {
         throw new Error(`Error: ${response.status}`);
       }
 
-      setSessions(prev => prev.filter(session => session.id === currentSessionId));
+      setSessions(prev => {
+        const updated = prev.filter(session => session.id === currentSessionId);
+        // Update cache list untuk endpoint list
+        const listUrl = `/api/v2/users/${userId}/sessions`;
+        cache.set(listUrl, { data: updated });
+        return updated;
+      });
       return true;
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Terjadi kesalahan saat mengakhiri semua sesi'));
