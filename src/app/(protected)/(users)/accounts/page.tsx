@@ -182,7 +182,7 @@ export default function AccountsPage() {
     setRefreshing(true)
     setRefreshError(null)
     try {
-      const res = await fetch(`/api/v2/auth/token-refresh`, {
+      const res = await fetch(`/api/v2/auth/refresh-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       })
