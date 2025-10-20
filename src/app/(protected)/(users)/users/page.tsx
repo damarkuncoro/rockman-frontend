@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { IconPlus } from "@tabler/icons-react"
 import { Button } from "@/components/shadcn/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/shadcn/ui/card"
+import { Badge } from "@/components/shadcn/ui/badge"
 
 // Komponen yang dipisahkan
 import { UserTable } from "@/components/users/UserTable"
@@ -31,7 +32,11 @@ export default function UsersPage() {
     handleViewUser,
     handleEditUser,
     handleDeleteConfirm,
-    handleDeleteUser
+    handleDeleteUser,
+    refetch,
+    clearCache,
+    isStale,
+    lastUpdated,
   } = useUsers()
 
   return (
@@ -43,6 +48,30 @@ export default function UsersPage() {
           Tambah User
         </Button>
       </div>
+
+      {/* Status cache useFetch untuk /api/v2/users */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Status Data</CardTitle>
+          <CardDescription>
+            Sumber: useFetchCache:/api/v2/users
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant={isStale ? "destructive" : "default"}>
+              {isStale ? "Stale" : "Fresh"}
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              Terakhir diperbarui: {lastUpdated ? new Date(lastUpdated).toLocaleString("id-ID") : "-"}
+            </span>
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => refetch()}>Refetch</Button>
+              <Button variant="secondary" size="sm" onClick={() => clearCache()}>Clear Cache</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

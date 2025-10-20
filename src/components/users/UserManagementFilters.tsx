@@ -32,6 +32,7 @@ interface UserManagementFiltersProps {
   uniqueDepartments: { id: string; name: string }[];
   uniqueLevels: any[];
   handleAddUser: () => void;
+  showAddButton?: boolean;
 }
 
 export const UserManagementFilters: React.FC<UserManagementFiltersProps> = ({
@@ -46,6 +47,7 @@ export const UserManagementFilters: React.FC<UserManagementFiltersProps> = ({
   uniqueDepartments,
   uniqueLevels,
   handleAddUser,
+  showAddButton = true,
 }) => {
   return (
     <Card>
@@ -111,10 +113,12 @@ export const UserManagementFilters: React.FC<UserManagementFiltersProps> = ({
           </Select>
 
           {/* Tombol Tambah Pengguna */}
-          <Button onClick={handleAddUser} className="w-full md:w-auto">
-            <IconPlus className="mr-2 h-4 w-4" />
-            Tambah Pengguna
-          </Button>
+          {showAddButton ? (
+            <Button onClick={handleAddUser} className="w-full md:w-auto">
+              <IconPlus className="mr-2 h-4 w-4" />
+              Tambah Pengguna
+            </Button>
+          ) : null}
         </div>
       </CardContent>
     </Card>

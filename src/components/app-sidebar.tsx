@@ -20,6 +20,7 @@ import {
   IconMapPin,
   IconHome,
   IconPhone,
+  IconNotification,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -84,6 +85,7 @@ const data = {
       icon: IconCategory,
     },
   ],
+  // Kelompok menu tambahan merujuk endpoint v2
   navFeatures: [
     {
       title: "Access Control",
@@ -158,7 +160,126 @@ const data = {
         },
       ],
     },
+    // Kelompokkan berdasarkan (nama folder / prefix)
+    {
+      title: "Users & Relations",
+      icon: IconUsers,
+      url: "/users",
+      items: [
+        { title: "Users", url: "/user-management" },
+        { title: "User Roles", url: "/user-roles" },
+        { title: "User Products", url: "/user-products" },
+        { title: "User Memberships", url: "/user-memberships" },
+        { title: "User Customers", url: "/user-customers" },
+        { title: "User Departments", url: "/users/departments" },
+      ],
+    },
+    {
+      title: "Knowledge Base",
+      icon: IconHelp,
+      url: "/knowledge-base",
+      items: [
+        { title: "Knowledge Base", url: "/knowledge-base" },
+        { title: "KB Articles", url: "/knowledge-base-articles" },
+      ],
+    },
+    {
+      title: "Tickets",
+      icon: IconShieldCheck,
+      url: "/tickets",
+      items: [
+        { title: "Tickets", url: "/tickets" },
+        { title: "Ticket Replies", url: "/ticket-replies" },
+        { title: "Ticket to KB", url: "/ticket-to-knowledge-base" },
+      ],
+    },
+    {
+      title: "Billing & Finance",
+      icon: IconChartBar,
+      url: "/billing",
+      items: [
+        { title: "Payments", url: "/payments" },
+        { title: "Payment Methods", url: "/payment-methods" },
+        { title: "Invoices", url: "/invoices" },
+        { title: "Invoice Items", url: "/invoice-items" },
+        { title: "Credit Notes", url: "/credit-notes" },
+        { title: "Credit Note Applications", url: "/credit-note-applications" },
+        { title: "Transactions", url: "/transactions" },
+      ],
+    },
+    {
+      title: "Products & Subscriptions",
+      icon: IconCategory,
+      url: "/products",
+      items: [
+        { title: "Products", url: "/products" },
+        { title: "Subscriptions", url: "/subscriptions" },
+        { title: "Subscription Discounts", url: "/subscription-discounts" },
+        { title: "Discounts", url: "/discounts" },
+        { title: "Loyalty Points", url: "/loyalty-points" },
+      ],
+    },
+    {
+      title: "HR & Employees",
+      icon: IconUserCheck,
+      url: "/employees",
+      items: [
+        { title: "Employees", url: "/employees" },
+        { title: "Employment History", url: "/employment-history" },
+        { title: "Leave Requests", url: "/leave-requests" },
+        { title: "Performance Reviews", url: "/performance-reviews" },
+        { title: "Payrolls", url: "/payrolls" },
+        { title: "Policies", url: "/policies" },
+        { title: "Policy Violations", url: "/policy-violations" },
+        { title: "Positions", url: "/positions" },
+      ],
+    },
+    {
+      title: "Departments",
+      icon: IconShield,
+      url: "/departments",
+      items: [
+        { title: "Departments", url: "/departments" },
+      ],
+    },
+    {
+      title: "Network",
+      icon: IconRoute,
+      url: "/network",
+      items: [
+        { title: "Network Equipment", url: "/network-equipment" },
+        { title: "Outages", url: "/outages" },
+      ],
+    },
+    {
+      title: "Addresses & Phones",
+      icon: IconHome,
+      url: "/addresses",
+      items: [
+        { title: "Addresses", url: "/addresses" },
+        { title: "Phones", url: "/phone-management" },
+      ],
+    },
+    {
+      title: "Notifications",
+      icon: IconNotification,
+      url: "/notifications",
+      items: [
+        { title: "Notifications", url: "/notifications" },
+        { title: "Change History", url: "/change-history" },
+      ],
+    },
+    {
+      title: "Customers",
+      icon: IconUsers,
+      url: "/customers",
+      items: [
+        { title: "Customers", url: "/customers" },
+        { title: "Customer Equipment", url: "/customer-equipment" },
+      ],
+    },
   ],
+  
   navSecondary: [
     {
       title: "Settings",

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from "@/components/shadcn/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/ui/select";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -17,6 +18,8 @@ interface UserManagementPaginationProps {
   goToPreviousPage: () => void;
   goToNextPage: () => void;
   goToLastPage: () => void;
+  itemsPerPage?: number;
+  onItemsPerPageChange?: (size: number) => void;
 }
 
 export const UserManagementPagination: React.FC<UserManagementPaginationProps> = ({
@@ -26,13 +29,32 @@ export const UserManagementPagination: React.FC<UserManagementPaginationProps> =
   goToPreviousPage,
   goToNextPage,
   goToLastPage,
+  itemsPerPage,
+  onItemsPerPageChange,
 }) => {
   if (totalPages <= 1) return null;
 
   return (
-    <div className="flex items-center justify-end space-x-2 py-4">
-      <div className="flex-1 text-sm text-muted-foreground">
-        Halaman {currentPage} dari {totalPages}
+    <div className="flex items-center justify-between gap-4 py-4">
+      <div className="flex items-center gap-2">
+        <div className="text-sm text-muted-foreground">
+          Halaman {currentPage} dari {totalPages}
+        </div>
+        {typeof itemsPerPage === "number" && onItemsPerPageChange && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Baris per halaman</span>
+            <Select value={String(itemsPerPage)} onValueChange={(v) => onItemsPerPageChange(Number(v))}>
+              <SelectTrigger className="w-28">
+                <SelectValue placeholder="Baris" />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50].map((opt) => (
+                  <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
       <div className="space-x-2">
         <Button

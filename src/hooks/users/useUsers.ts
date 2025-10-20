@@ -15,8 +15,8 @@ export function useUsers() {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false)
   const [selectedUserId, setSelectedUserId] = React.useState<string | null>(null)
 
-  // Menggunakan hook useAllUsers untuk mendapatkan data users
-  const { data, loading, error, refetch } = useAllUsers()
+  // Menggunakan hook useAllUsers untuk mendapatkan data users + indikator cache
+  const { data, loading, error, refetch, clearCache, isStale, lastUpdated } = useAllUsers()
 
   // Handler untuk melihat detail user
   const handleViewUser = (userId: string) => {
@@ -74,6 +74,8 @@ export function useUsers() {
     filteredUsers,
     loading,
     error,
+    isStale,
+    lastUpdated,
     search,
     setSearch,
     showDeleteDialog,
@@ -84,6 +86,7 @@ export function useUsers() {
     handleEditUser,
     handleDeleteConfirm,
     handleDeleteUser,
-    refetch
+    refetch,
+    clearCache
   }
 }

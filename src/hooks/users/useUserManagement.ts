@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useDeleteUser } from '@/hooks/api/v2/users/[id]/delete.hook';
+import { useDeleteUser } from '@/hooks/api/v2/users/[id]/delete.hook.v2';
 import { useAllDepartments } from '@/hooks/api/v2/departments/all.hook.v2';
 import { useAllUsers } from '@/hooks/api/v2/users/all.hook.v2';
 import React from 'react';
@@ -15,6 +15,11 @@ export type UserManagementHook = {
   isLoading: boolean;
   error: string | null;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
+  // Cache indikator untuk users
+  usersLastUpdated: number | null;
+  usersIsStale: boolean;
+  refreshUsers: () => Promise<void>;
+  clearUsersCache: () => void;
   
   // Filter dan pencarian
   searchTerm: string;
@@ -55,11 +60,11 @@ export type UserManagementHook = {
   fetchUsers: () => Promise<void>;
   fetchDepartments: () => Promise<void>;
   formatDate: (dateString: string) => string;
-  deleteUser: (userId: string) => Promise<void>;
+  deleteUser: () => Promise<void>;
   handleAddUser: () => void;
   handleViewUser: (user: any) => void;
   handleEditUser: (user: any) => void;
-  handleDeleteConfirm: () => Promise<boolean | undefined>;
+  handleDeleteConfirm: (user: any) => void;
   handleDeleteUser: () => Promise<boolean | undefined>;
   getInitials: (name: string) => string;
   
@@ -120,9 +125,10 @@ export const useUserManagement = (): UserManagementHook => {
   });
 
   // Hooks API
-  const { data, loading: isUsersLoading, error: usersError } = useAllUsers();
+  const { data, loading: isUsersLoading, error: usersError, refetch, clearCache, lastUpdated, isStale } = useAllUsers();
   const { data: deptData, loading: isDeptLoading, error: deptError } = useAllDepartments();
-  const { deleteUser: apiDeleteUser } = useDeleteUser();
+  // Inisialisasi delete hook v2 dengan ID user yang sedang dipilih
+  const { deleteUser: apiDeleteUser } = useDeleteUser(selectedUser?.id ?? "");
 
   
   /**
@@ -182,9 +188,9 @@ export const useUserManagement = (): UserManagementHook => {
   /**
    * Delete user
    */
-  const deleteUser = async (userId: string): Promise<void> => {
+  const deleteUser = async (): Promise<void> => {
     try {
-      await apiDeleteUser(userId);
+      await apiDeleteUser();
       await fetchUsers();
       return Promise.resolve();
     } catch (error: any) {
@@ -234,12 +240,10 @@ export const useUserManagement = (): UserManagementHook => {
   /**
    * Handler untuk konfirmasi delete user
    */
-  const handleDeleteConfirm = async (): Promise<boolean | undefined> => {
-    if (selectedUser) {
-      setIsDeleteModalOpen(true);
-      return true;
-    }
-    return false;
+  const handleDeleteConfirm = (user: any): void => {
+    if (!user) return;
+    setSelectedUser(user);
+    setIsDeleteModalOpen(true);
   };
 
   /**
@@ -249,7 +253,7 @@ export const useUserManagement = (): UserManagementHook => {
     if (!selectedUser) return false;
     
     try {
-      await deleteUser(selectedUser.id);
+      await deleteUser();
       setIsDeleteModalOpen(false);
       setSelectedUser(null);
       return true;
@@ -378,6 +382,11 @@ export const useUserManagement = (): UserManagementHook => {
     isLoading,
     error,
     setError,
+    // Cache indikator
+    usersLastUpdated: lastUpdated ?? null,
+    usersIsStale: Boolean(isStale),
+    refreshUsers: async () => { await refetch(); await fetchUsers(); },
+    clearUsersCache: () => { clearCache(); },
     
     // Filter dan pencarian
     searchTerm,

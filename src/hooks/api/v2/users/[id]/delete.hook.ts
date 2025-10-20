@@ -28,7 +28,7 @@ export const useDeleteUser = (id?: string) => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/v2/users/${targetId}`, {
+      const response = await fetch(`/v2/users/${targetId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
