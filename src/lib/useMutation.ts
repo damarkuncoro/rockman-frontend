@@ -1,74 +1,91 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { getAuthToken, isTokenExpired, refreshAuthToken } from "./auth";
 
-type HttpMethod = "POST" | "PUT" | "PATCH" | "DELETE";
+export type HttpMethod = "POST" | "PUT" | "PATCH" | "DELETE";
 
-export type UseMutationOptions = {
+export type UseMutationOptions<U = any> = {
   headers?: Record<string, string>;
+  /** Optimistic update — dipanggil sebelum request */
+  optimisticUpdate?: (body: U) => void;
+  /** Rollback — dipanggil jika request gagal */
+  rollback?: () => void;
+  /** Cache keys yang akan dihapus saat sukses */
+  invalidateKeys?: string[];
+  /** Auto clear data sebelum request */
+  clearOnStart?: boolean;
 };
 
 export type UseMutationReturn<T, U> = {
-  /** Data hasil fetch */
   data: T | null;
-  
-  /** Status loading */
   loading: boolean;
-  
-  /** Error jika terjadi kesalahan */
   error: Error | null;
-  
-  /** Function untuk menjalankan mutasi */
   mutate: (body: U) => Promise<T | undefined>;
+  cancel: () => void;
 };
 
 export function useMutation<T = any, U = any>(
   url: string,
-  method: HttpMethod,
-  options: UseMutationOptions = {}
+  method: HttpMethod = "POST",
+  options: UseMutationOptions<U> = {}
 ): UseMutationReturn<T, U> {
   const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const mutate = useCallback(async (body: U): Promise<T | undefined> => {
     setLoading(true);
     setError(null);
-    setData(null);
+    if (options.clearOnStart) setData(null);
+
+    // Batalkan request sebelumnya (jika ada)
+    controllerRef.current?.abort();
+    controllerRef.current = new AbortController();
 
     try {
-      let token = getAuthToken();
+      // Jalankan optimistic update sebelum request dikirim
+      options.optimisticUpdate?.(body);
 
-      // Refresh awal jika token kadaluarsa
+      // Ambil token dan refresh jika perlu
+      let token: string | undefined = getAuthToken() ?? undefined;
       if (token && isTokenExpired(token)) {
-        const refreshed = await refreshAuthToken();
-        token = refreshed || token;
+        const refreshed = await refreshAuthToken() ?? undefined;
+        token = refreshed ?? token;
       }
 
-      const doRequest = async (bearer?: string) => fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-          ...(bearer && { Authorization: `Bearer ${bearer}` }),
-        },
-        body: JSON.stringify(body),
-      });
+      // Fungsi request
+      const doRequest = async (bearer?: string) => {
+        return fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            ...options.headers,
+            ...(bearer && { Authorization: `Bearer ${bearer}` }),
+          },
+          body: JSON.stringify(body),
+          signal: controllerRef.current!.signal,
+        });
+      };
 
-      let response = await doRequest(token || undefined);
+      let response = await doRequest(token ?? undefined);
+      if (response.status === 401) {
+        const refreshed = await refreshAuthToken() ?? undefined;
+        if (refreshed) response = await doRequest(refreshed);
+      }
 
-      const contentType = response.headers.get('content-type') || '';
-      let result: any = null;
+      // Parsing response secara fleksibel
+      const contentType = response.headers.get("content-type") || "";
+      let result: any;
       try {
-        if (contentType.includes('application/json')) {
+        if (contentType.includes("application/json")) {
           result = await response.json();
         } else {
           const text = await response.text();
           result = text ? { message: text } : null;
         }
-      } catch (parseError) {
-        // Fallback: coba baca sebagai text jika parsing JSON gagal
+      } catch {
         try {
           const text = await response.text();
           result = text ? { message: text } : null;
@@ -77,53 +94,39 @@ export function useMutation<T = any, U = any>(
         }
       }
 
-      // Jika unauthorized, coba refresh token lalu ulangi sekali
-      if (response.status === 401) {
-        const refreshed = await refreshAuthToken();
-        if (refreshed) {
-          response = await doRequest(refreshed);
-          const ct2 = response.headers.get('content-type') || '';
-          try {
-            if (ct2.includes('application/json')) {
-              result = await response.json();
-            } else {
-              const text = await response.text();
-              result = text ? { message: text } : null;
-            }
-          } catch {
-            result = null;
-          }
-        }
-      }
-
+      // Tangani error response
       if (!response.ok) {
-        console.error('Response error:', {
-          status: response.status,
-          statusText: response.statusText,
-          result,
-          url,
-          method
-        });
-        const message = (result && (result.message || result.error)) || `${method} request failed (${response.status})`;
+        const message =
+          (result && (result.message || result.error)) ||
+          `${method} request failed (${response.status})`;
         throw new Error(message);
       }
-      
+
+      // Jika sukses
       setData(result);
+      options.invalidateKeys?.forEach((key) => {
+        if (typeof window !== "undefined") {
+          // contoh: bersihkan cache dari sessionStorage/localStorage
+          sessionStorage.removeItem(key);
+        }
+      });
+
       return result;
     } catch (err: any) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      // Re-throw error agar bisa ditangkap di level pemanggil jika perlu
-      throw error;
+      // Rollback jika ada error
+      options.rollback?.();
+
+      const e = err instanceof Error ? err : new Error(String(err));
+      if (e.name !== "AbortError") setError(e);
+      throw e;
     } finally {
       setLoading(false);
     }
-  }, [url, method, options.headers]);
+  }, [url, method, options]);
 
-  return {
-    data,
-    loading,
-    error,
-    mutate,
-  };
+  const cancel = useCallback(() => {
+    controllerRef.current?.abort();
+  }, []);
+
+  return { data, loading, error, mutate, cancel };
 }
